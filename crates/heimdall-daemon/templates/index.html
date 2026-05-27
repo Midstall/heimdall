@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="{{ locale }}">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title data-i18n="web.title">{{ self.trans("web.title") }}</title>
+    <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg" />
+    <link rel="stylesheet" href="/assets/app.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand" data-i18n="web.brand">{{ self.trans("web.brand") }}</div>
+      <div class="status" id="status" data-i18n="common.status.connecting">{{ self.trans("common.status.connecting") }}</div>
+      <div class="banner" data-i18n="web.banner_trusted_env">{{ self.trans("web.banner_trusted_env") }}</div>
+    </header>
+    <nav class="tabs">
+      <button class="tab active" data-view="jobs" data-i18n="web.tabs.jobs">{{ self.trans("web.tabs.jobs") }}</button>
+      <button class="tab" data-view="campaigns" data-i18n="web.tabs.campaigns">{{ self.trans("web.tabs.campaigns") }}</button>
+      <button class="tab" data-view="duts" data-i18n="web.tabs.duts">{{ self.trans("web.tabs.duts") }}</button>
+    </nav>
+    <main>
+      <section class="view" id="view-jobs">
+        <table>
+          <thead>
+            <tr>
+              <th data-i18n="tui.jobs.col_id">{{ self.trans("tui.jobs.col_id") }}</th>
+              <th data-i18n="tui.jobs.col_dut">{{ self.trans("tui.jobs.col_dut") }}</th>
+              <th data-i18n="tui.duts.col_kind">{{ self.trans("tui.duts.col_kind") }}</th>
+              <th data-i18n="tui.jobs.col_state">{{ self.trans("tui.jobs.col_state") }}</th>
+              <th>Created</th>
+            </tr>
+          </thead>
+          <tbody id="jobs-tbody">
+            {% if jobs.is_empty() %}
+            <tr class="empty"><td colspan="5" data-i18n="tui.empty.no_jobs">{{ self.trans("tui.empty.no_jobs") }}</td></tr>
+            {% else %}
+            {% for job in jobs %}
+            <tr>
+              <td class="id">{{ job.id_short }}</td>
+              <td>{{ job.dut }}</td>
+              <td>{{ job.kind }}</td>
+              <td class="{{ job.state_class }}">{{ job.state_label }}</td>
+              <td>{{ job.created_at }}</td>
+            </tr>
+            {% endfor %}
+            {% endif %}
+          </tbody>
+        </table>
+      </section>
+      <section class="view hidden" id="view-campaigns">
+        <table>
+          <thead>
+            <tr>
+              <th data-i18n="tui.campaigns.col_id">{{ self.trans("tui.campaigns.col_id") }}</th>
+              <th data-i18n="tui.campaigns.col_dut">{{ self.trans("tui.campaigns.col_dut") }}</th>
+              <th data-i18n="tui.campaigns.col_template">{{ self.trans("tui.campaigns.col_template") }}</th>
+              <th data-i18n="tui.campaigns.col_state">{{ self.trans("tui.campaigns.col_state") }}</th>
+              <th data-i18n="tui.duts.col_serial">{{ self.trans("tui.duts.col_serial") }}</th>
+            </tr>
+          </thead>
+          <tbody id="campaigns-tbody">
+            {% if campaigns.is_empty() %}
+            <tr class="empty"><td colspan="5" data-i18n="tui.empty.no_campaigns">{{ self.trans("tui.empty.no_campaigns") }}</td></tr>
+            {% else %}
+            {% for c in campaigns %}
+            <tr>
+              <td class="id">{{ c.id_short }}</td>
+              <td>{{ c.dut }}</td>
+              <td>{{ c.template }}</td>
+              <td class="campaign-state-{{ c.state }}">{{ c.state }}</td>
+              <td>{{ c.chip_serial }}</td>
+            </tr>
+            {% endfor %}
+            {% endif %}
+          </tbody>
+        </table>
+      </section>
+      <section class="view hidden" id="view-duts">
+        <div id="duts-list">
+          {% if duts.is_empty() %}
+          <p class="empty-block" data-i18n="web.duts.no_duts">{{ self.trans("web.duts.no_duts") }}</p>
+          {% else %}
+          {% for d in duts %}
+          <div class="dut-card">
+            <div class="dut-header">
+              <span class="dut-id">{{ d.id }}</span>
+              <span class="dut-kind">{{ d.kind }}</span>
+              <span class="dut-serial">{{ d.chip_serial }}</span>
+              <span class="dut-jtag">{{ self.trans("web.duts.jtag_prefix") }} {{ d.jtag_driver }}</span>
+              <span class="dut-status dut-status-{{ d.status_class }}">{{ d.status_label }}</span>
+            </div>
+            {% if d.has_netlist %}
+            <details class="netlist-panel">
+              <summary>{{ self.trans("web.duts.show_netlist") }}</summary>
+              <div class="netlist-svg">
+                <img src="/duts/{{ d.id }}/netlist.svg" alt="netlist for {{ d.id }}" />
+              </div>
+            </details>
+            {% endif %}
+          </div>
+          {% endfor %}
+          {% endif %}
+        </div>
+      </section>
+    </main>
+    <footer class="helpbar">
+      <span data-i18n="web.help.shortcuts">{{ self.trans("web.help.shortcuts") }}</span>
+      <span data-i18n="web.help.live_updates">{{ self.trans("web.help.live_updates") }}</span>
+    </footer>
+    <script src="/assets/app.js"></script>
+  </body>
+</html>

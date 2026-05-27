@@ -1,0 +1,26 @@
+# cargo-audit configuration. Each ignored RUSTSEC ID documents WHY the
+# vulnerability is unreachable in our shipped binary so future auditors can
+# re-evaluate when deps move.
+#
+# Re-check whether these can be lifted on every dep bump.
+
+[advisories]
+ignore = [
+    # rsa 0.9.x: timing-sidechannel ("Marvin Attack") in RSA-PKCS#1v1.5 decrypt.
+    # Reaches us via sqlx-mysql, which is pulled in by sqlx's `macros` feature
+    # (the proc-macro support needs to know every backend's SQL dialect at
+    # compile time, even when only the sqlite backend is enabled at runtime).
+    # Our daemon never opens a MySQL connection -> the vulnerable code path is
+    # dead at runtime. Track upstream sqlx for a backend-scoped macros feature.
+    "RUSTSEC-2023-0071",
+
+    # paste 1.0.15: unmaintained warning. Transitive via ratatui 0.29 for
+    # internal macro-by-example helpers. Not a CVE, not a soundness issue.
+    # Drop once ratatui releases a version that removes the paste dep.
+    "RUSTSEC-2024-0436",
+
+    # lru 0.12.5: unsoundness in `IterMut`. ratatui uses lru as a cell cache
+    # but does not invoke `IterMut`; the unsound code path is not reachable
+    # through our usage. Drop once ratatui depends on lru >= 0.13.
+    "RUSTSEC-2026-0002",
+]

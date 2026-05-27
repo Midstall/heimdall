@@ -1,0 +1,39 @@
+[package]
+name = "heimdall-transport"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Transport abstractions for Heimdall: JTAG (OpenOCD, bit-bang, FTDI), serial, GPIO, and mocks."
+
+[features]
+default = ["mock"]
+mock = []
+serial = ["dep:tokio-serial"]
+openocd = []
+linux-cdev = ["dep:gpiocdev"]
+bitbang-jtag = []
+ftdi = ["dep:nusb", "dep:futures"]
+
+[dependencies]
+tokio = { workspace = true }
+async-trait.workspace = true
+hex = { workspace = true }
+thiserror.workspace = true
+tracing.workspace = true
+tokio-serial = { workspace = true, optional = true }
+nusb = { workspace = true, optional = true }
+futures = { workspace = true, optional = true }
+
+# gpiocdev only exists on Linux (talks to /dev/gpiochip*). Keeping it
+# target-gated means the `linux-cdev` feature is inert on macOS/Windows
+# rather than failing the build.
+[target.'cfg(target_os = "linux")'.dependencies]
+gpiocdev = { workspace = true, optional = true }
+

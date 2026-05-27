@@ -1,0 +1,22 @@
+[package]
+name = "heimdall-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Core types for Heimdall: IDs, verdicts, observations, stimuli, artifacts, and DUT kinds."
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+bytes.workspace = true
+uuid.workspace = true
+sha2.workspace = true
+hex.workspace = true
+thiserror.workspace = true

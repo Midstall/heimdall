@@ -1,0 +1,10 @@
+[host]
+name = "x"
+
+[[dut]]
+id = "d1"
+kind = "river-rc1-nano"
+transports = ["does-not-exist"]
+
+[golden.river]
+backend = "mock"

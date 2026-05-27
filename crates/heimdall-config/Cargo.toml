@@ -1,0 +1,21 @@
+[package]
+name = "heimdall-config"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "TOML configuration schema, parsing, and validation for Heimdall verification rigs."
+
+[dependencies]
+heimdall-core.workspace = true
+serde.workspace = true
+toml.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+

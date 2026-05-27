@@ -1,0 +1,6 @@
+{
+  "fields": {
+    "x10": { "type": "u64", "value": 66 }
+  },
+  "captured_after": null
+}

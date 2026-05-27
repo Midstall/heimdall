@@ -1,0 +1,26 @@
+[package]
+name = "heimdall-test"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Test runner and acceptance campaign framework for Heimdall."
+
+[dependencies]
+heimdall-core.workspace = true
+heimdall-driver.workspace = true
+heimdall-golden.workspace = true
+heimdall-tools.workspace = true
+async-trait.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tracing-subscriber.workspace = true

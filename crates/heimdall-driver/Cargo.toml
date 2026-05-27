@@ -1,0 +1,37 @@
+[package]
+name = "heimdall-driver"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "TestDriver trait and concrete drivers (River RISC-V CPU, Aegis FPGA, Mock) for Heimdall."
+
+[features]
+default = []
+river = ["heimdall-transport/openocd", "heimdall-transport/serial"]
+hil = ["river", "heimdall-golden/spike", "heimdall-tools/clang-asm"]
+aegis = ["heimdall-golden/aegis", "dep:aegis-ip"]
+
+[dependencies]
+heimdall-core.workspace = true
+heimdall-transport = { workspace = true, features = ["mock"] }
+heimdall-tools.workspace = true
+heimdall-golden.workspace = true
+async-trait.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tokio = { workspace = true }
+tempfile = { workspace = true }
+aegis-ip = { workspace = true, optional = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+heimdall-transport = { workspace = true, features = ["openocd", "bitbang-jtag"] }
+heimdall-test.workspace = true

@@ -1,0 +1,16 @@
+[package]
+name = "heimdall-i18n"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Internationalization catalog for Heimdall: English and Japanese translations with env-var locale detection."
+
+[dependencies]
+toml.workspace = true

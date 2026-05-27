@@ -1,0 +1,26 @@
+[host]
+name = "rig-01"
+bind = "127.0.0.1:7777"
+
+[[dut]]
+id = "river-rc1-nano-1"
+kind = "river-rc1-nano"
+chip_serial = "R1N-0001"
+transports = ["jtag.openocd-1", "uart.usb0"]
+expect_idcode = "0xdeadbeef"
+
+[[transport.jtag]]
+id = "jtag.openocd-1"
+driver = "openocd"
+openocd_endpoint = "127.0.0.1:6666"
+freq_hz = 1000000
+
+[[transport.uart]]
+id = "uart.usb0"
+path = "/dev/null"
+baud = 115200
+
+[golden]
+[golden.river]
+backend = "spike-one-shot"
+binary = "/usr/bin/spike"

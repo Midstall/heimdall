@@ -1,0 +1,30 @@
+[package]
+name = "heimdall-tools"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "External-tool wrappers (clang, spike, OpenOCD) used by Heimdall drivers and golden models."
+
+[features]
+default = []
+clang-asm = []
+
+[dependencies]
+heimdall-core.workspace = true
+async-trait.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tokio = { workspace = true }
+sha2.workspace = true
+hex.workspace = true
+tempfile.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

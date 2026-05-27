@@ -1,0 +1,39 @@
+[package]
+name = "heimdall"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Umbrella crate re-exporting the Heimdall hardware verification suite (core, driver, golden, test, fuzzer)."
+
+[features]
+default = []
+aegis = ["heimdall-golden/aegis", "heimdall-driver/aegis", "heimdall-daemon?/aegis"]
+serial = ["heimdall-transport/serial"]
+openocd = ["heimdall-transport/openocd"]
+river = ["heimdall-driver/river", "openocd", "heimdall-daemon?/river"]
+spike = ["heimdall-golden/spike"]
+clang-asm = ["heimdall-tools/clang-asm"]
+fuzzer = ["dep:heimdall-fuzzer"]
+fuzzer-aegis = ["fuzzer", "aegis", "heimdall-fuzzer/aegis"]
+daemon = ["dep:heimdall-daemon"]
+tui = ["dep:heimdall-tui"]
+
+[dependencies]
+heimdall-core.workspace = true
+heimdall-config.workspace = true
+heimdall-transport.workspace = true
+heimdall-tools.workspace = true
+heimdall-golden.workspace = true
+heimdall-driver.workspace = true
+heimdall-test.workspace = true
+heimdall-fuzzer = { workspace = true, optional = true }
+heimdall-daemon = { workspace = true, optional = true }
+heimdall-tui = { workspace = true, optional = true }
+thiserror.workspace = true

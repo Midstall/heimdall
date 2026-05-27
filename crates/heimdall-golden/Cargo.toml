@@ -1,0 +1,33 @@
+[package]
+name = "heimdall-golden"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Golden reference models for Heimdall: spike RISC-V ISS, Aegis simulator, and SPICE/ngspice."
+
+[features]
+default = []
+spike = []
+aegis = ["dep:aegis-ip", "dep:aegis-sim", "dep:serde_json"]
+spice = []
+
+[dependencies]
+heimdall-core.workspace = true
+aegis-ip  = { workspace = true, optional = true }
+aegis-sim = { workspace = true, optional = true }
+async-trait.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tokio = { workspace = true }
+serde_json = { workspace = true, optional = true }
+tempfile.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "heimdall-logo"
+version = "0.1.0"
+requires-python = ">=3.11"
+description = "Programmatic generator for the Heimdall project logo."
+
+[project.scripts]
+heimdall-logo = "heimdall_logo.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["heimdall_logo*"]

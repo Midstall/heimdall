@@ -1,0 +1,107 @@
+# Japanese (ja) translations. Keys must mirror en.toml; any key missing here
+# falls back to the English value at lookup time.
+
+# 日本語ログメッセージ。`i18n_key` フィールドは英語と共通。
+
+[log.daemon]
+starting = "デーモンを {bind} で起動中"
+listening = "デーモンは {addr} で待機中"
+shutting_down = "終了中"
+no_config = "--config が指定されていません; 空の DUT レジストリで起動します"
+loaded_config = "heimdall.toml を読み込みました: ホスト={host} DUT 数={duts}"
+non_loopback_bind = "ループバック以外のアドレス {addr} にバインド中; 認証なし、信頼環境専用"
+
+[log.dump]
+complete = "ダンプ完了: ジョブ {jobs}, キャンペーン {campaigns}, イベント {events}, ブロブ {blobs}"
+restore_complete = "復元完了: ジョブ {jobs}, キャンペーン {campaigns}, イベント {events}, ブロブ {blobs}"
+
+[common]
+heimdall = "Heimdall"
+yes = "はい"
+no = "いいえ"
+ok = "OK"
+none = "なし"
+loading = "読み込み中..."
+
+[common.status]
+connected = "接続済み"
+disconnected = "切断"
+idle = "アイドル"
+connecting = "接続中..."
+
+[tui]
+brand = "heimdall tui"
+view_label = "表示"
+connecting_to = "{url} に接続中..."
+connected_to = "{url} に接続済み"
+disconnected_reason = "切断: {reason}; 再接続中..."
+disconnected_short = "切断, 再接続中..."
+event_label = "イベント: {kind}"
+
+[tui.conn]
+connected = "接続"
+connecting = "接続中"
+disconnected = "切断"
+
+[tui.view]
+jobs = "ジョブ"
+campaigns = "キャンペーン"
+duts = "DUT"
+job_detail = "ジョブ詳細"
+
+[tui.help]
+quit = "q 終了"
+jobs = "1 ジョブ"
+campaigns = "2 キャンペーン"
+duts = "3 DUT"
+move = "j/k 移動"
+open = "enter 開く"
+back = "esc 戻る"
+refresh = "r 更新"
+
+[tui.jobs]
+title = "ジョブ"
+col_id = "ID"
+col_dut = "DUT"
+col_state = "状態"
+
+[tui.campaigns]
+title = "キャンペーン"
+col_id = "ID"
+col_dut = "DUT"
+col_template = "テンプレート"
+col_state = "状態"
+
+[tui.duts]
+title = "DUT 一覧"
+col_id = "ID"
+col_kind = "種類"
+col_serial = "シリアル"
+col_jtag = "JTAG"
+col_status = "状態"
+col_lease = "占有"
+leased_by = "占有中 ({holder})"
+
+[tui.empty]
+no_jobs = "ジョブはありません"
+no_campaigns = "キャンペーンはありません"
+no_duts = "DUT は設定されていません"
+
+[web]
+title = "Heimdall"
+brand = "HEIMDALL"
+banner_trusted_env = "信頼環境のみ、認証なし"
+
+[web.tabs]
+jobs = "ジョブ"
+campaigns = "キャンペーン"
+duts = "DUT"
+
+[web.duts]
+show_netlist = "ネットリスト表示"
+jtag_prefix = "jtag:"
+no_duts = "DUT は設定されていません"
+
+[web.help]
+shortcuts = "1/2/3 で表示切替"
+live_updates = "/events WebSocket で自動更新"

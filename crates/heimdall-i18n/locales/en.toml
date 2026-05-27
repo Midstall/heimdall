@@ -1,0 +1,110 @@
+# English (default) translations for Heimdall. Keys use dotted-path
+# namespaces grouped by surface: tui.*, web.*, common.*. Placeholders use
+# braces and are substituted by `t!(key, name = value)` at call sites.
+
+# Log-message keys. The `i18n_key` structured field on each tracing event
+# carries the catalog key, so parsers can correlate localized lines across
+# languages.
+
+[log.daemon]
+starting = "starting daemon on {bind}"
+listening = "daemon listening on {addr}"
+shutting_down = "shutting down"
+no_config = "no --config provided; running with empty DUT registry"
+loaded_config = "loaded heimdall.toml: host={host} duts={duts}"
+non_loopback_bind = "binding non-loopback address {addr}; no auth, trusted env only"
+
+[log.dump]
+complete = "dump complete: {jobs} jobs, {campaigns} campaigns, {events} events, {blobs} blobs"
+restore_complete = "restore complete: {jobs} jobs, {campaigns} campaigns, {events} events, {blobs} blobs"
+
+[common]
+heimdall = "Heimdall"
+yes = "yes"
+no = "no"
+ok = "ok"
+none = "none"
+loading = "loading..."
+
+[common.status]
+connected = "connected"
+disconnected = "disconnected"
+idle = "idle"
+connecting = "connecting..."
+
+[tui]
+brand = "heimdall tui"
+view_label = "view"
+connecting_to = "connecting to {url}..."
+connected_to = "connected to {url}"
+disconnected_reason = "disconnected: {reason}; retrying..."
+disconnected_short = "disconnected, retrying..."
+event_label = "event: {kind}"
+
+[tui.conn]
+connected = "CONN"
+connecting = "CONN?"
+disconnected = "DISC"
+
+[tui.view]
+jobs = "jobs"
+campaigns = "campaigns"
+duts = "duts"
+job_detail = "job-detail"
+
+[tui.help]
+quit = "q quit"
+jobs = "1 jobs"
+campaigns = "2 campaigns"
+duts = "3 duts"
+move = "j/k move"
+open = "enter open"
+back = "esc back"
+refresh = "r refresh"
+
+[tui.jobs]
+title = "Jobs"
+col_id = "Id"
+col_dut = "DUT"
+col_state = "State"
+
+[tui.campaigns]
+title = "Campaigns"
+col_id = "Id"
+col_dut = "DUT"
+col_template = "Template"
+col_state = "State"
+
+[tui.duts]
+title = "DUTs"
+col_id = "Id"
+col_kind = "Kind"
+col_serial = "Serial"
+col_jtag = "JTAG"
+col_status = "Status"
+col_lease = "Lease"
+leased_by = "leased ({holder})"
+
+[tui.empty]
+no_jobs = "no jobs"
+no_campaigns = "no campaigns"
+no_duts = "no DUTs configured"
+
+[web]
+title = "Heimdall"
+brand = "HEIMDALL"
+banner_trusted_env = "trusted-environment deployment, no auth"
+
+[web.tabs]
+jobs = "Jobs"
+campaigns = "Campaigns"
+duts = "DUTs"
+
+[web.duts]
+show_netlist = "Show netlist"
+jtag_prefix = "jtag:"
+no_duts = "no DUTs configured"
+
+[web.help]
+shortcuts = "1/2/3 to switch views"
+live_updates = "refreshes via /events websocket"

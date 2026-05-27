@@ -1,0 +1,49 @@
+[package]
+name = "heimdall-tui"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "ratatui terminal UI for the Heimdall daemon."
+
+[dependencies]
+heimdall-daemon.workspace = true
+heimdall-i18n.workspace = true
+
+ratatui.workspace = true
+crossterm.workspace = true
+tokio-tungstenite.workspace = true
+tokio = { workspace = true, features = ["sync", "rt-multi-thread", "macros", "time", "net", "io-util"] }
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+futures.workspace = true
+
+[dev-dependencies]
+heimdall-core.workspace = true
+heimdall-config.workspace = true
+heimdall-daemon = { workspace = true, features = ["sqlite"] }
+reqwest.workspace = true
+tempfile.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+
+[[test]]
+name = "duts_client"
+path = "tests/duts_client.rs"
+required-features = ["sqlite"]
+
+[[test]]
+name = "reconnect"
+path = "tests/reconnect.rs"
+required-features = ["sqlite"]
+
+[features]
+sqlite = ["heimdall-daemon/sqlite"]

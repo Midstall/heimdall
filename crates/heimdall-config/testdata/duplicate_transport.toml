@@ -1,0 +1,10 @@
+[host]
+name = "x"
+
+[[transport.uart]]
+id = "uart.0"
+path = "/dev/null"
+
+[[transport.uart]]
+id = "uart.0"
+path = "/dev/null"

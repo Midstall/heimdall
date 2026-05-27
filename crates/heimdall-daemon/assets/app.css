@@ -1,0 +1,233 @@
+/* Tokyo Night palette (public; derived from enkia/tokyo-night-vscode-theme) */
+:root {
+  --bg-base: #1a1b26;
+  --bg-dark: #16161e;
+  --bg-medium: #1e202e;
+  --fg-primary: #a9b1d6;
+  --fg-bright: #c0caf5;
+  --fg-muted: #787c99;
+  --fg-dim: #545c7e;
+  --accent-blue: #7aa2f7;
+  --accent-blue-light: #7dcfff;
+  --accent-cyan: #2ac3de;
+  --accent-teal: #73daca;
+  --accent-green: #9ece6a;
+  --accent-purple: #bb9af7;
+  --accent-red: #f7768e;
+  --accent-red-dark: #db4b4b;
+  --accent-orange: #ff9e64;
+  --accent-yellow: #e0af68;
+
+  --verdict-pass: var(--accent-green);
+  --verdict-fail: var(--accent-red);
+  --verdict-skip: var(--accent-yellow);
+  --verdict-error: var(--accent-red-dark);
+  --state-running: var(--accent-blue);
+  --state-queued: var(--fg-muted);
+  --state-cancelled: var(--fg-dim);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg-base);
+  color: var(--fg-primary);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 14px;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 0.75rem 1rem;
+  background: var(--bg-dark);
+  border-bottom: 1px solid var(--bg-medium);
+}
+
+.brand {
+  color: var(--fg-bright);
+  font-weight: 700;
+  letter-spacing: 0.18em;
+}
+
+.status {
+  color: var(--fg-muted);
+  flex: 1;
+}
+
+.banner {
+  color: var(--accent-orange);
+  font-size: 12px;
+  letter-spacing: 0.05em;
+}
+
+.tabs {
+  display: flex;
+  gap: 0;
+  background: var(--bg-medium);
+  border-bottom: 1px solid var(--bg-dark);
+}
+
+.tab {
+  background: transparent;
+  color: var(--fg-muted);
+  border: none;
+  padding: 0.5rem 1rem;
+  font: inherit;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+
+.tab.active {
+  color: var(--fg-bright);
+  border-bottom-color: var(--accent-blue);
+}
+
+.tab:hover { color: var(--fg-primary); }
+
+main {
+  padding: 1rem;
+}
+
+.view.hidden { display: none; }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--bg-medium);
+}
+
+th, td {
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--bg-dark);
+}
+
+th {
+  color: var(--fg-bright);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+
+td.id { color: var(--fg-muted); font-family: ui-monospace, monospace; }
+
+.empty td { color: var(--fg-dim); text-align: center; padding: 1rem; }
+
+.state-queued { color: var(--state-queued); }
+.state-running { color: var(--state-running); }
+.state-done.verdict-pass { color: var(--verdict-pass); }
+.state-done.verdict-fail { color: var(--verdict-fail); }
+.state-done.verdict-skip { color: var(--verdict-skip); }
+.state-done.verdict-error { color: var(--verdict-error); }
+.state-failed { color: var(--verdict-error); }
+.state-cancelled { color: var(--state-cancelled); }
+
+.campaign-state-pending { color: var(--state-queued); }
+.campaign-state-running { color: var(--state-running); }
+.campaign-state-pass { color: var(--verdict-pass); }
+.campaign-state-fail { color: var(--verdict-fail); }
+.campaign-state-mixed { color: var(--accent-orange); }
+.campaign-state-cancelled { color: var(--state-cancelled); }
+
+.empty-block {
+  color: var(--fg-dim);
+  text-align: center;
+  padding: 2rem;
+}
+
+.dut-card {
+  background: var(--bg-medium);
+  border: 1px solid var(--bg-dark);
+  border-radius: 4px;
+  margin-bottom: 0.75rem;
+  padding: 0.75rem 1rem;
+}
+
+.dut-header {
+  display: flex;
+  gap: 1.5rem;
+  align-items: baseline;
+}
+
+.dut-id {
+  color: var(--fg-bright);
+  font-weight: 600;
+  font-family: ui-monospace, monospace;
+}
+
+.dut-kind {
+  color: var(--accent-blue);
+}
+
+.dut-serial,
+.dut-jtag {
+  color: var(--fg-muted);
+  font-size: 12px;
+}
+
+.dut-status {
+  margin-left: auto;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 0.15rem 0.55rem;
+  border-radius: 3px;
+  border: 1px solid currentColor;
+  font-family: ui-monospace, monospace;
+}
+
+.dut-status-connected {
+  color: var(--accent-green);
+}
+
+.dut-status-disconnected {
+  color: var(--accent-red);
+}
+
+.dut-status-idle {
+  color: var(--fg-dim);
+}
+
+.netlist-panel {
+  margin-top: 0.5rem;
+}
+
+.netlist-panel summary {
+  cursor: pointer;
+  color: var(--accent-blue-light);
+  padding: 0.25rem 0;
+  user-select: none;
+}
+
+.netlist-panel summary:hover {
+  color: var(--fg-bright);
+}
+
+.netlist-svg {
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  background: var(--bg-base);
+  border: 1px solid var(--bg-dark);
+  border-radius: 4px;
+  overflow: auto;
+}
+
+.netlist-svg img {
+  display: block;
+  max-width: 100%;
+}
+
+.helpbar {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  background: var(--bg-dark);
+  color: var(--fg-muted);
+  display: flex;
+  justify-content: space-between;
+  padding: 0.4rem 1rem;
+  font-size: 12px;
+  border-top: 1px solid var(--bg-medium);
+}
