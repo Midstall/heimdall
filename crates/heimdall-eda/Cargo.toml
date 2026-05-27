@@ -19,13 +19,6 @@ path = "src/main.rs"
 [dependencies]
 heimdall = { workspace = true, features = ["fuzzer", "daemon", "tui", "river"] }
 heimdall-daemon = { workspace = true, features = ["sqlite", "river"] }
-
-# heimdall-daemon's `aegis` feature pulls in heimdall-transport/linux-cdev
-# for chardev GPIO, which only builds on Linux. Darwin builds get a daemon
-# without the Aegis factories. River works on both via OpenOCD over TCP.
-[target.'cfg(target_os = "linux")'.dependencies]
-heimdall = { workspace = true, features = ["aegis"] }
-heimdall-daemon = { workspace = true, features = ["aegis"] }
 heimdall-i18n = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 clap.workspace = true
@@ -38,3 +31,10 @@ async-trait = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+
+# heimdall-daemon's `aegis` feature pulls in heimdall-transport/linux-cdev
+# for chardev GPIO, which only builds on Linux. Darwin gets a daemon
+# without the Aegis factories. River works on both via OpenOCD over TCP.
+[target.'cfg(target_os = "linux")'.dependencies]
+heimdall = { workspace = true, features = ["aegis"] }
+heimdall-daemon = { workspace = true, features = ["aegis"] }

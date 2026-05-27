@@ -176,3 +176,8 @@ Every crate in `crates/` is publishable on its own. Build only what you need.
 ## Commercial support
 
 Midstall offers paid integration work for Heimdall: new DUT drivers, custom transports, on-prem deployment, and bringup-as-a-service. Contact `inquire@midstall.com`.
+
+## Community
+
+- **Discord**: [Join the server](https://discord.gg/HRhetTVcHG)
+- **Contact**: [inquire@midstall.com](mailto:inquire@midstall.com)
