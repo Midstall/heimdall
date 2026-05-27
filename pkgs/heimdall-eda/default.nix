@@ -17,7 +17,7 @@ craneLib.buildPackage (
       homepage = "https://github.com/Midstall/heimdall";
       license = lib.licenses.asl20;
       mainProgram = "heimdall";
-      platforms = lib.platforms.linux;
+      platforms = lib.platforms.unix;
     };
   }
 )

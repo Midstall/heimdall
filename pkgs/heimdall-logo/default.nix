@@ -38,13 +38,13 @@ python3Packages.buildPythonPackage (finalAttrs: {
     meta = with lib; {
       description = "Rendered Heimdall logo SVGs.";
       license = licenses.asl20;
-      platforms = platforms.linux;
+      platforms = platforms.unix;
     };
   };
 
   meta = with lib; {
     description = "Programmatic generator for the Heimdall project logo.";
     license = licenses.asl20;
-    platforms = platforms.linux;
+    platforms = platforms.unix;
   };
 })
