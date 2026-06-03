@@ -18,6 +18,13 @@ categories = ["development-tools::testing", "embedded", "hardware-support"]
 [workspace.dependencies]
 # core
 serde = { version = "1", features = ["derive"] }
+tokio-util = "0.7"
+# Build-time icon set: heimdall-web build.rs reads LUCIDE_FONT_BYTES
+# and the Icon enum to stage `lucide.ttf` + a generated CSS class
+# table into the embedded assets bundle. Default features only; the
+# `iced` feature would pull in the whole iced runtime.
+lucide-icons = { version = "1", default-features = false }
+ts-rs = { version = "12", features = ["serde-compat"] }
 base64 = "0.22"
 serde_json = "1"
 toml = "0.8"
@@ -25,28 +32,48 @@ bytes = "1"
 uuid = { version = "1", features = ["v4", "serde"] }
 sha2 = "0.10"
 hex = "0.4"
-chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
+chrono = { version = "0.4", default-features = false, features = [
+  "clock",
+  "serde",
+] }
 
 # async
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "io-util", "process", "fs", "time", "sync", "net"] }
+tokio = { version = "1", features = [
+  "rt-multi-thread",
+  "macros",
+  "io-util",
+  "process",
+  "fs",
+  "time",
+  "sync",
+  "net",
+] }
 async-trait = "0.1"
 futures = "0.3"
 
 # errors + logging
 thiserror = "1"
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"] }
+tracing-subscriber = { version = "0.3", features = [
+  "env-filter",
+  "fmt",
+  "json",
+] }
 
 # binary-only
 clap = { version = "4", features = ["derive"] }
 color-eyre = "0.6"
 eyre = "0.6"
 directories = "5"
+indicatif = "0.17"
 
 # tui
 ratatui = "0.29"
 crossterm = { version = "0.28", features = ["event-stream"] }
 tokio-tungstenite = "0.24"
+
+# ELF parsing for River boot-elf loads. Pure-Rust, no_std-friendly, focused.
+elf = "0.7"
 
 # transports (feature-gated where appropriate)
 tokio-serial = "5"
@@ -56,8 +83,17 @@ nusb = "0.1"
 # daemon
 axum = { version = "0.7", features = ["ws", "macros"] }
 tower-http = { version = "0.6", features = ["trace", "cors"] }
-sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "sqlite", "macros", "migrate", "chrono"] }
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+sqlx = { version = "0.8", default-features = false, features = [
+  "runtime-tokio",
+  "sqlite",
+  "macros",
+  "migrate",
+  "chrono",
+] }
+reqwest = { version = "0.12", default-features = false, features = [
+  "json",
+  "rustls-tls",
+] }
 
 # tests
 tempfile = "3"
@@ -80,15 +116,19 @@ aegis-ip = { git = "https://github.com/Midstall/aegis.git", rev = "dce7edc5706d6
 aegis-sim = { git = "https://github.com/Midstall/aegis.git", rev = "dce7edc5706d6c2539fa2e17bdb7e3528c987e09", version = "0.1.0" }
 
 # intra-workspace
-heimdall-i18n      = { path = "crates/heimdall-i18n",      version = "0.1.0" }
-heimdall-core      = { path = "crates/heimdall-core",      version = "0.1.0" }
-heimdall-config    = { path = "crates/heimdall-config",    version = "0.1.0" }
+heimdall-i18n = { path = "crates/heimdall-i18n", version = "0.1.0" }
+heimdall-core = { path = "crates/heimdall-core", version = "0.1.0" }
+heimdall-api = { path = "crates/heimdall-api", version = "0.1.0" }
+heimdall-mock-openocd = { path = "crates/heimdall-mock-openocd", version = "0.1.0" }
+heimdall-config = { path = "crates/heimdall-config", version = "0.1.0" }
 heimdall-transport = { path = "crates/heimdall-transport", version = "0.1.0" }
-heimdall-tools     = { path = "crates/heimdall-tools",     version = "0.1.0" }
-heimdall-golden    = { path = "crates/heimdall-golden",    version = "0.1.0" }
-heimdall-driver    = { path = "crates/heimdall-driver",    version = "0.1.0" }
-heimdall-test      = { path = "crates/heimdall-test",      version = "0.1.0" }
-heimdall-fuzzer    = { path = "crates/heimdall-fuzzer",    version = "0.1.0" }
-heimdall-daemon    = { path = "crates/heimdall-daemon",    version = "0.1.0" }
-heimdall-tui       = { path = "crates/heimdall-tui",       version = "0.1.0" }
-heimdall           = { path = "crates/heimdall",           version = "0.1.0" }
+heimdall-tools = { path = "crates/heimdall-tools", version = "0.1.0" }
+heimdall-disasm = { path = "crates/heimdall-disasm", version = "0.1.0" }
+heimdall-golden = { path = "crates/heimdall-golden", version = "0.1.0" }
+heimdall-driver = { path = "crates/heimdall-driver", version = "0.1.0" }
+heimdall-test = { path = "crates/heimdall-test", version = "0.1.0" }
+heimdall-fuzzer = { path = "crates/heimdall-fuzzer", version = "0.1.0" }
+heimdall-daemon = { path = "crates/heimdall-daemon", version = "0.1.0" }
+heimdall-web = { path = "crates/heimdall-web", version = "0.1.0" }
+heimdall-tui = { path = "crates/heimdall-tui", version = "0.1.0" }
+heimdall = { path = "crates/heimdall", version = "0.1.0" }

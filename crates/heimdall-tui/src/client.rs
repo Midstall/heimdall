@@ -8,7 +8,7 @@ use tokio::sync::mpsc;
 use tokio_tungstenite::tungstenite::protocol::Message;
 use tracing::{debug, warn};
 
-use crate::app::{ConnectionStatus, DutRow};
+use crate::app::{AboutInfoTui, ConnectionStatus, DutRow, JobLogEntry};
 use crate::error::{Result, TuiError};
 
 #[derive(Clone)]
@@ -27,6 +27,21 @@ impl DaemonClient {
 
     pub fn base_url(&self) -> &str {
         &self.base_url
+    }
+
+    /// Fetch `/about` and deserialize into the TUI's local mirror
+    /// of `AboutInfo`. Cheap and cacheable: the response only
+    /// changes when the daemon binary is rebuilt + restarted.
+    pub async fn about(&self) -> Result<AboutInfoTui> {
+        let url = format!("{}/about", self.base_url);
+        Ok(self
+            .http
+            .get(&url)
+            .send()
+            .await?
+            .error_for_status()?
+            .json()
+            .await?)
     }
 
     pub async fn list_jobs(&self) -> Result<Vec<Job>> {
@@ -132,6 +147,71 @@ impl DaemonClient {
             });
         }
         Ok(rows)
+    }
+
+    /// Fetch persisted `Event::JobLog` rows for a job. Empty `Ok(Vec::new())`
+    /// if the daemon has no log history for the id (e.g. a freshly-queued
+    /// job). The returned entries are ordered oldest-first.
+    pub async fn list_job_logs(&self, job_id: &str) -> Result<Vec<JobLogEntry>> {
+        let url = format!("{}/jobs/{job_id}/logs", self.base_url);
+        let body: serde_json::Value = self
+            .http
+            .get(&url)
+            .send()
+            .await?
+            .error_for_status()?
+            .json()
+            .await?;
+        let logs = body
+            .get("logs")
+            .and_then(|v| v.as_array())
+            .cloned()
+            .unwrap_or_default();
+        // `EventRecord` serializes flat: `id`, `ts`, and the event variant
+        // fields (`kind`, `job`, `level`, ...) sit alongside each other on
+        // each row. Rows missing `ts` are dropped with a warn so the buffer
+        // never holds an entry with a synthetic or fallback timestamp.
+        Ok(logs
+            .into_iter()
+            .filter_map(|row| {
+                let ts = row.get("ts").and_then(|v| v.as_str()).and_then(|s| {
+                    chrono::DateTime::parse_from_rfc3339(s)
+                        .ok()
+                        .map(|dt| dt.with_timezone(&chrono::Utc))
+                })?;
+                let i18n_args = row
+                    .get("i18n_args")
+                    .and_then(|v| v.as_object())
+                    .map(|m| {
+                        m.iter()
+                            .map(|(k, val)| (k.clone(), val.as_str().unwrap_or("").to_string()))
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                Some(JobLogEntry {
+                    level: row
+                        .get("level")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("info")
+                        .to_string(),
+                    message: row
+                        .get("message")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string(),
+                    stage: row
+                        .get("stage")
+                        .and_then(|v| v.as_str())
+                        .map(str::to_string),
+                    ts,
+                    i18n_key: row
+                        .get("i18n_key")
+                        .and_then(|v| v.as_str())
+                        .map(str::to_string),
+                    i18n_args,
+                })
+            })
+            .collect())
     }
 
     pub async fn list_campaigns(&self) -> Result<Vec<Campaign>> {

@@ -37,6 +37,8 @@ async fn start_with_one_dut() -> (heimdall_daemon::DaemonHandles, TempDir) {
             bringup: None,
             netlist: None,
             spice_watches: vec![],
+            timeouts: Default::default(),
+            isa: None,
         }],
         transport: TransportSection {
             jtag: vec![JtagTransportCfg {

@@ -6,6 +6,7 @@ use std::time::Duration;
 /// A typed architectural-state value.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", content = "value", rename_all = "kebab-case")]
+#[cfg_attr(feature = "bindings", derive(ts_rs::TS), ts(export))]
 pub enum ValueRepr {
     U64(u64),
     Bytes(Vec<u8>),
@@ -24,8 +25,13 @@ impl fmt::Display for ValueRepr {
 
 /// A snapshot of architectural state. Ordered map so diffs are deterministic.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "bindings", derive(ts_rs::TS), ts(export))]
 pub struct State {
     pub fields: BTreeMap<String, ValueRepr>,
+    #[cfg_attr(
+        feature = "bindings",
+        ts(type = "{ secs: number, nanos: number } | null")
+    )]
     pub captured_after: Option<Duration>,
 }
 

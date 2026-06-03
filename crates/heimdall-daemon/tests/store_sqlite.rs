@@ -2,7 +2,7 @@
 
 #![cfg(feature = "sqlite")]
 
-use heimdall_core::DutId;
+use heimdall_core::{DutId, DutKind};
 use heimdall_daemon::{
     Campaign, CampaignId, CampaignState, CampaignTemplate, Event, JobFilter, JobKind, JobState,
     JobStateTag, JobStore, NewJob, SqliteJobStore, VerdictSummary,
@@ -16,16 +16,20 @@ async fn store() -> SqliteJobStore {
 async fn create_get_roundtrip() {
     let store = store().await;
     let job = store
-        .create_job(NewJob {
-            dut: DutId::new("d1"),
-            kind: JobKind::MockHello,
-            campaign: None,
-        })
+        .create_job(
+            NewJob {
+                dut: DutId::new("d1"),
+                kind: JobKind::MockHello,
+                campaign: None,
+            },
+            DutKind::RiverRc1Small,
+        )
         .await
         .unwrap();
     let back = store.get_job(job.id).await.unwrap().expect("present");
     assert_eq!(back.id, job.id);
     assert_eq!(back.dut, job.dut);
+    assert_eq!(back.dut_kind, DutKind::RiverRc1Small);
     assert!(matches!(back.state, JobState::Queued));
     assert!(matches!(back.kind, JobKind::MockHello));
 }
@@ -44,11 +48,14 @@ async fn get_missing_returns_none() {
 async fn update_state_transitions() {
     let store = store().await;
     let job = store
-        .create_job(NewJob {
-            dut: DutId::new("d1"),
-            kind: JobKind::MockHello,
-            campaign: None,
-        })
+        .create_job(
+            NewJob {
+                dut: DutId::new("d1"),
+                kind: JobKind::MockHello,
+                campaign: None,
+            },
+            DutKind::RiverRc1Nano,
+        )
         .await
         .unwrap();
     store.update_state(job.id, JobState::Running).await.unwrap();
@@ -65,19 +72,25 @@ async fn update_state_transitions() {
 async fn list_filters_by_state() {
     let store = store().await;
     let a = store
-        .create_job(NewJob {
-            dut: DutId::new("d1"),
-            kind: JobKind::MockHello,
-            campaign: None,
-        })
+        .create_job(
+            NewJob {
+                dut: DutId::new("d1"),
+                kind: JobKind::MockHello,
+                campaign: None,
+            },
+            DutKind::RiverRc1Nano,
+        )
         .await
         .unwrap();
     let _b = store
-        .create_job(NewJob {
-            dut: DutId::new("d2"),
-            kind: JobKind::MockHello,
-            campaign: None,
-        })
+        .create_job(
+            NewJob {
+                dut: DutId::new("d2"),
+                kind: JobKind::MockHello,
+                campaign: None,
+            },
+            DutKind::RiverRc1Nano,
+        )
         .await
         .unwrap();
     store
@@ -105,21 +118,103 @@ async fn list_filters_by_state() {
 }
 
 #[tokio::test]
+async fn list_job_logs_filters_by_kind_and_job_and_since() {
+    let store = store().await;
+    let job_a = heimdall_daemon::JobId::new();
+    let job_b = heimdall_daemon::JobId::new();
+
+    // Mix of JobLog rows for two different jobs and a non-log event.
+    let id1 = store
+        .append_event(Event::JobLog {
+            job: job_a,
+            level: heimdall_daemon::LogLevel::Info,
+            message: "a1".into(),
+            stage: Some("prepare".into()),
+            i18n_key: None,
+            i18n_args: Default::default(),
+        })
+        .await
+        .unwrap();
+    let _ = store
+        .append_event(Event::JobLog {
+            job: job_b,
+            level: heimdall_daemon::LogLevel::Info,
+            message: "b1".into(),
+            stage: None,
+            i18n_key: None,
+            i18n_args: Default::default(),
+        })
+        .await
+        .unwrap();
+    let id3 = store
+        .append_event(Event::JobLog {
+            job: job_a,
+            level: heimdall_daemon::LogLevel::Warn,
+            message: "a2".into(),
+            stage: Some("load".into()),
+            i18n_key: None,
+            i18n_args: Default::default(),
+        })
+        .await
+        .unwrap();
+    let _ = store
+        .append_event(Event::JobCreated {
+            job: job_a,
+            dut: DutId::new("d1"),
+        })
+        .await
+        .unwrap();
+
+    let all_a = store
+        .list_job_logs(job_a, heimdall_daemon::EventId(0), 10)
+        .await
+        .unwrap();
+    assert_eq!(all_a.len(), 2);
+    let msgs: Vec<_> = all_a
+        .iter()
+        .map(|rec| match &rec.event {
+            Event::JobLog { message, .. } => message.clone(),
+            _ => "<not-log>".into(),
+        })
+        .collect();
+    assert_eq!(msgs, vec!["a1".to_string(), "a2".to_string()]);
+    // Each record carries a stamped UTC timestamp.
+    for rec in &all_a {
+        assert!(rec.ts.timestamp() > 0, "ts must be populated: {rec:?}");
+    }
+
+    // since= filters to events strictly newer than id1.
+    let delta = store.list_job_logs(job_a, id1, 10).await.unwrap();
+    assert_eq!(delta.len(), 1);
+    assert_eq!(delta[0].id.0, id3.0);
+    match &delta[0].event {
+        Event::JobLog { message, .. } => assert_eq!(message, "a2"),
+        other => panic!("unexpected: {other:?}"),
+    }
+}
+
+#[tokio::test]
 async fn append_and_list_events() {
     let store = store().await;
     let id1 = store
         .append_event(Event::JobLog {
             job: heimdall_daemon::JobId::new(),
-            level: "info".into(),
+            level: heimdall_daemon::LogLevel::Info,
             message: "hello".into(),
+            stage: None,
+            i18n_key: None,
+            i18n_args: Default::default(),
         })
         .await
         .unwrap();
     let id2 = store
         .append_event(Event::JobLog {
             job: heimdall_daemon::JobId::new(),
-            level: "info".into(),
+            level: heimdall_daemon::LogLevel::Info,
             message: "world".into(),
+            stage: None,
+            i18n_key: None,
+            i18n_args: Default::default(),
         })
         .await
         .unwrap();
@@ -169,11 +264,14 @@ async fn job_with_campaign_id_roundtrips() {
     store.create_campaign(campaign).await.unwrap();
 
     let job = store
-        .create_job(NewJob {
-            dut: DutId::new("d1"),
-            kind: JobKind::MockHello,
-            campaign: Some(campaign_id),
-        })
+        .create_job(
+            NewJob {
+                dut: DutId::new("d1"),
+                kind: JobKind::MockHello,
+                campaign: Some(campaign_id),
+            },
+            DutKind::RiverRc1Nano,
+        )
         .await
         .unwrap();
     assert_eq!(job.campaign, Some(campaign_id));
@@ -184,6 +282,55 @@ async fn job_with_campaign_id_roundtrips() {
     let jobs = store.list_jobs_for_campaign(campaign_id).await.unwrap();
     assert_eq!(jobs.len(), 1);
     assert_eq!(jobs[0].id, job.id);
+}
+
+#[tokio::test]
+async fn job_program_round_trips_via_sqlite() {
+    use heimdall_core::ArtifactKind;
+    use heimdall_daemon::{BlobId, JobProgramRef};
+
+    let store = store().await;
+    let job = store
+        .create_job(
+            NewJob {
+                dut: DutId::new("river-1"),
+                kind: JobKind::MockHello,
+                campaign: None,
+            },
+            DutKind::RiverRc1Nano,
+        )
+        .await
+        .unwrap();
+    // Nothing recorded yet.
+    assert!(store.get_job_program(job.id).await.unwrap().is_none());
+
+    let r = JobProgramRef {
+        blob_id: BlobId("deadbeef".into()),
+        kind: ArtifactKind::RawBytes,
+        iter: Some(7),
+    };
+    store.set_job_program(job.id, r.clone()).await.unwrap();
+    let got = store
+        .get_job_program(job.id)
+        .await
+        .unwrap()
+        .expect("present");
+    assert_eq!(got.blob_id.0, r.blob_id.0);
+    assert!(matches!(got.kind, ArtifactKind::RawBytes));
+    assert_eq!(got.iter, Some(7));
+
+    // Upsert: subsequent writes overwrite. Pin that the table holds
+    // exactly the latest, not a history.
+    let r2 = JobProgramRef {
+        blob_id: BlobId("c0ffee".into()),
+        kind: ArtifactKind::ElfRiscv,
+        iter: Some(42),
+    };
+    store.set_job_program(job.id, r2.clone()).await.unwrap();
+    let got2 = store.get_job_program(job.id).await.unwrap().unwrap();
+    assert_eq!(got2.blob_id.0, "c0ffee");
+    assert!(matches!(got2.kind, ArtifactKind::ElfRiscv));
+    assert_eq!(got2.iter, Some(42));
 }
 
 #[tokio::test]

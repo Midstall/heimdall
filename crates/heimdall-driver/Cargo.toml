@@ -14,7 +14,7 @@ description = "TestDriver trait and concrete drivers (River RISC-V CPU, Aegis FP
 
 [features]
 default = []
-river = ["heimdall-transport/openocd", "heimdall-transport/serial"]
+river = ["heimdall-transport/openocd", "heimdall-transport/serial", "dep:elf"]
 hil = ["river", "heimdall-golden/spike", "heimdall-tools/clang-asm"]
 aegis = ["heimdall-golden/aegis", "dep:aegis-ip"]
 
@@ -30,8 +30,13 @@ tokio = { workspace = true }
 tempfile = { workspace = true }
 aegis-ip = { workspace = true, optional = true }
 serde_json = { workspace = true }
+elf = { workspace = true, optional = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
-heimdall-transport = { workspace = true, features = ["openocd", "bitbang-jtag"] }
+heimdall-transport = { workspace = true, features = [
+  "openocd",
+  "bitbang-jtag",
+] }
 heimdall-test.workspace = true
+heimdall-mock-openocd.workspace = true

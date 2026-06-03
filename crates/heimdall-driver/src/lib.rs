@@ -13,4 +13,4 @@ pub mod aegis;
 
 pub use error::DriverError;
 pub use mock::MockDriver;
-pub use trait_def::{Dut, Result, TestDriver};
+pub use trait_def::{Dut, IsaProbe, Result, TestDriver};

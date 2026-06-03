@@ -104,8 +104,10 @@ where
         write_entry(&mut tar, "campaigns.jsonl", &camp_jsonl)?;
 
         let mut ev_jsonl = Vec::new();
-        for (id, ev) in &events {
-            let line = serde_json::to_string(&(id, ev))?;
+        for rec in &events {
+            // Persist as `[id, ts, event]` so restore can round-trip the
+            // timestamp the daemon assigned at original publish time.
+            let line = serde_json::to_string(&(rec.id, rec.ts, &rec.event))?;
             ev_jsonl.extend_from_slice(line.as_bytes());
             ev_jsonl.push(b'\n');
         }
@@ -209,8 +211,9 @@ where
 
     if let Some(b) = ev_jsonl {
         for line in split_lines(&b) {
-            let (id, ev): (EventId, crate::types::Event) = serde_json::from_slice(line)?;
-            store.import_event(id, ev).await?;
+            let (id, ts, ev): (EventId, chrono::DateTime<chrono::Utc>, crate::types::Event) =
+                serde_json::from_slice(line)?;
+            store.import_event(id, ts, ev).await?;
             stats.events_restored += 1;
         }
     }

@@ -4,7 +4,7 @@ use axum::{
     http::StatusCode,
     routing::get,
 };
-use heimdall_core::{DutId, DutKind};
+use heimdall_core::DutId;
 use serde::{Deserialize, Serialize};
 
 use crate::campaign::{refresh_state, submit_campaign};
@@ -44,12 +44,12 @@ async fn create(
     State(app): State<AppState>,
     Json(body): Json<CreateCampaign>,
 ) -> Result<(StatusCode, Json<Campaign>), ApiError> {
-    // Look up the DUT record from the registry. If the DUT is not registered,
-    // fall back to RiverRc1Nano and no bringup payload so that integration
-    // tests that do not populate the registry continue to pass.
-    let dut_record = app.dut_registry.lookup(&body.dut);
-    let dut_kind = dut_record.map(|r| r.kind).unwrap_or(DutKind::RiverRc1Nano);
-    let bringup = dut_record.and_then(|r| r.bringup.as_ref());
+    let dut_record = app
+        .dut_registry
+        .lookup(&body.dut)
+        .ok_or_else(|| ApiError::BadRequest(format!("unknown dut `{}`", body.dut.0)))?;
+    let dut_kind = dut_record.kind;
+    let bringup = dut_record.bringup.as_ref();
     let campaign = submit_campaign(
         &app.queue,
         body.template,

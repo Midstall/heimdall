@@ -1,3 +1,4 @@
+pub mod about;
 pub mod campaigns;
 pub mod duts;
 pub mod job_detail;

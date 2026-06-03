@@ -3,7 +3,7 @@
 #![cfg(feature = "sqlite")]
 
 use chrono::Utc;
-use heimdall_core::DutId;
+use heimdall_core::{DutId, DutKind};
 use heimdall_daemon::{
     BlobStore, Campaign, CampaignId, CampaignState, CampaignTemplate, Event, EventId, JobFilter,
     JobKind, JobStore, LocalFsBlobStore, NewJob, SqliteJobStore, dump as snapshot,
@@ -36,19 +36,25 @@ async fn round_trip_preserves_jobs_campaigns_blobs() {
     src_store.create_campaign(camp.clone()).await.unwrap();
 
     let j1 = src_store
-        .create_job(NewJob {
-            dut: DutId::new("dut-a"),
-            kind: JobKind::MockHello,
-            campaign: Some(camp.id),
-        })
+        .create_job(
+            NewJob {
+                dut: DutId::new("dut-a"),
+                kind: JobKind::MockHello,
+                campaign: Some(camp.id),
+            },
+            DutKind::RiverRc1Nano,
+        )
         .await
         .unwrap();
     let j2 = src_store
-        .create_job(NewJob {
-            dut: DutId::new("dut-b"),
-            kind: JobKind::MockHello,
-            campaign: None,
-        })
+        .create_job(
+            NewJob {
+                dut: DutId::new("dut-b"),
+                kind: JobKind::MockHello,
+                campaign: None,
+            },
+            DutKind::AegisLuna1,
+        )
         .await
         .unwrap();
 
@@ -110,10 +116,10 @@ async fn round_trip_preserves_jobs_campaigns_blobs() {
     let restored_b2 = dst_blobs.get(&b2).await.unwrap().expect("b2 present");
     assert_eq!(&restored_b2[..], b"another blob");
 
-    // Event preserved with original id.
+    // Event preserved with original id and timestamp.
     let evs = dst_store.list_events_since(EventId(0), 100).await.unwrap();
     assert_eq!(evs.len(), 1);
-    assert_eq!(evs[0].0, ev_id);
+    assert_eq!(evs[0].id, ev_id);
 
     // After restore, the destination store's next append_event must produce
     // an EventId strictly greater than every restored one.

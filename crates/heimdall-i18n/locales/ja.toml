@@ -10,6 +10,9 @@ shutting_down = "終了中"
 no_config = "--config が指定されていません; 空の DUT レジストリで起動します"
 loaded_config = "heimdall.toml を読み込みました: ホスト={host} DUT 数={duts}"
 non_loopback_bind = "ループバック以外のアドレス {addr} にバインド中; 認証なし、信頼環境専用"
+reconcile_dead = "起動時整理: 実行中ジョブ {job} を停止 (前回デーモンが途中終了)"
+reconcile_requeue = "起動時整理: 待機中の取り残しジョブ {job} を再投入"
+reconcile_summary = "起動時整理: 停止 {dead} 件、再投入 {requeued} 件"
 
 [log.dump]
 complete = "ダンプ完了: ジョブ {jobs}, キャンペーン {campaigns}, イベント {events}, ブロブ {blobs}"
@@ -27,6 +30,7 @@ loading = "読み込み中..."
 connected = "接続済み"
 disconnected = "切断"
 idle = "アイドル"
+in_use = "使用中"
 connecting = "接続中..."
 
 [tui]
@@ -48,22 +52,60 @@ jobs = "ジョブ"
 campaigns = "キャンペーン"
 duts = "DUT"
 job_detail = "ジョブ詳細"
+about = "情報"
 
 [tui.help]
 quit = "q 終了"
 jobs = "1 ジョブ"
 campaigns = "2 キャンペーン"
 duts = "3 DUT"
+about = "4 情報"
 move = "j/k 移動"
 open = "enter 開く"
 back = "esc 戻る"
 refresh = "r 更新"
+
+[tui.about]
+heading = "このデーモンについて"
+version = "バージョン"
+build_profile = "ビルド"
+features = "機能"
+no_features = "なし"
+loading = "読み込み中..."
+
+[tui.about.profile]
+debug = "デバッグ"
+release = "リリース"
 
 [tui.jobs]
 title = "ジョブ"
 col_id = "ID"
 col_dut = "DUT"
 col_state = "状態"
+col_kind = "種類"
+col_created = "作成日時"
+
+[tui.job_kind]
+"mock-hello" = "モックハロー"
+"load-aegis-bitstream" = "Aegis ビットストリームロード"
+"run-aegis-vector" = "Aegis ベクター実行"
+"boot-river-elf" = "River ELF 起動"
+fuzz = "ファズ"
+named = "名前付き"
+
+[tui.job_state]
+queued = "待機中"
+running = "実行中"
+done = "完了"
+failed = "失敗"
+cancelled = "中断"
+dead = "停止 (再起動により)"
+
+[tui.verdict]
+pass = "合格"
+fail = "不合格"
+skip = "省略"
+error = "エラー"
 
 [tui.campaigns]
 title = "キャンペーン"
@@ -81,6 +123,11 @@ col_jtag = "JTAG"
 col_status = "状態"
 col_lease = "占有"
 leased_by = "占有中 ({holder})"
+snapshot_title = "レジスタスナップショット"
+snapshot_select = "(レジスタを表示するには DUT を選択)"
+snapshot_none = "レジスタスナップショットはまだありません"
+source_dut = "DUT"
+source_golden = "ゴールデン"
 
 [tui.empty]
 no_jobs = "ジョブはありません"
@@ -96,12 +143,138 @@ banner_trusted_env = "信頼環境のみ、認証なし"
 jobs = "ジョブ"
 campaigns = "キャンペーン"
 duts = "DUT"
+about = "情報"
+
+[web.about]
+heading = "このデーモンについて"
+version = "バージョン"
+build_profile = "ビルド"
+features = "機能"
+no_features = "なし"
+load_failed = "読み込み失敗: {error}"
+
+[web.about.profile]
+debug = "デバッグ"
+release = "リリース"
 
 [web.duts]
 show_netlist = "ネットリスト表示"
 jtag_prefix = "jtag:"
 no_duts = "DUT は設定されていません"
+source_dut = "DUT"
+source_golden = "ゴールデン"
+no_snapshot = "レジスタスナップショットはまだありません"
+isa = "ISA"
+isa_unknown = "不明"
+
+[web.duts.isa_source]
+probe = "プローブ"
+config = "設定"
 
 [web.help]
-shortcuts = "1/2/3 で表示切替"
+shortcuts = "1/2/3/4 で表示切替"
 live_updates = "/events WebSocket で自動更新"
+
+[web.jobs]
+no_logs = "ログイベントはまだありません"
+disasm_title = "逆アセンブル"
+disasm_loading = "逆アセンブルを読み込み中..."
+disasm_iter = "反復"
+cancel = "中断"
+cancel_failed = "中断に失敗: {error}"
+restart = "再実行"
+restart_glyph = "↻"
+restart_failed = "再実行に失敗: {error}"
+delete = "削除"
+delete_confirm = "ジョブ {id} を削除しますか？元に戻せません。"
+delete_failed = "削除に失敗: {error}"
+prev = "‹ 前へ"
+next = "次へ ›"
+page = "ページ {page} / {pages} (全 {total} 件)"
+prune = "古いジョブを削除..."
+prune_title = "古いジョブを削除"
+prune_help = "指定日数より前の終了済みジョブ (完了、失敗、中断、停止) をすべて削除します。実行中のジョブには触れません。"
+prune_older_than = "経過日数"
+prune_days = "日"
+prune_cancel = "キャンセル"
+prune_confirm = "削除"
+prune_done = "{count} 件のジョブを削除しました。"
+prune_failed = "削除に失敗: {error}"
+
+[web.new_job]
+open = "ジョブを投入"
+submit = "送信"
+cancel = "キャンセル"
+dut = "DUT"
+kind = "種類"
+submit_failed = "送信に失敗: {error}"
+no_duts = "DUT が未設定です。heimdall.toml に追加してから投入してください"
+invalid_json = "ペイロードが JSON として無効です"
+file_required = "ファイルが必要です"
+
+[web.new_job.fuzz]
+iterations = "反復回数"
+seed = "シード"
+insn_count = "プログラム毎の命令数"
+cycles = "wait_halt サイクル数"
+generator = "ジェネレーター"
+strict_coverage = "厳格カバレッジ：差異で Pass→Fail に反転"
+
+[web.new_job.boot_river_elf]
+elf = "ELF イメージ"
+cycles = "wait_halt サイクル数"
+
+[web.new_job.aegis]
+descriptor = "ディスクリプタ (JSON)"
+bitstream = "ビットストリーム"
+inputs = "入力 (name=true/false、1行ずつ)"
+expected_outputs = "期待出力 (name=true/false)"
+settle_cycles = "セトル待ちサイクル数"
+
+[web.new_job.named]
+name = "名前"
+payload = "ペイロード (JSON)"
+
+[web.disasm.error]
+no_iter_yet = "ファズジョブはまだ反復をロードしていません。最初の反復がプログラムを生成したら再度確認してください"
+aegis_unsupported = "Aegis ビットストリームの描画は未対応です。ネットリスト→Verilog レンダラーが予定の経路です"
+no_program = "ジョブ種別 `{kind}` には逆アセンブル可能なプログラムがありません"
+elf_decode = "elf_b64 デコードに失敗: {detail}"
+
+[log.stage]
+build = "ビルド"
+compile = "コンパイル"
+prepare = "準備"
+golden-reset = "ゴールデン初期化"
+golden-load = "ゴールデン書込み"
+load = "ロード"
+run = "実行"
+golden-step = "ゴールデン進行"
+observe = "観測"
+diff = "差分"
+release = "解放"
+
+[log.level]
+trace = "トレース"
+debug = "デバッグ"
+info = "情報"
+warn = "警告"
+error = "エラー"
+
+[log.runner]
+build_start = "テスト計画を構築中"
+compile_start = "ツールチェーンでアーティファクトをコンパイル中"
+prepare_start = "トランスポート接続、IDCODE 走査中"
+golden_reset = "ゴールデンモデル初期化中"
+golden_load = "ゴールデンへイメージをロード中"
+load_start = "DUT へイメージをロード中 ({bytes} バイト)"
+run_start = "刺激予算 {budget}"
+golden_step = "ゴールデンモデル進行中"
+observe_dut = "DUT 状態を読込中"
+observe_golden = "ゴールデン状態を読込中"
+diff_result = "判定={verdict}"
+release_done = "トランスポート切断"
+
+[log.worker]
+dispatching = "{summary} を投入中"
+cancelled = "オペレーターによりジョブをキャンセルしました"

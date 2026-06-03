@@ -7,7 +7,10 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use base64::Engine;
-use heimdall_daemon::{BlobStore, JobStore, LocalFsBlobStore, SqliteJobStore, runtime};
+use heimdall_core::DutKind;
+use heimdall_daemon::{
+    BlobStore, DutRecord, DutRegistry, JobStore, LocalFsBlobStore, SqliteJobStore, runtime,
+};
 use serde_json::json;
 use tempfile::TempDir;
 
@@ -17,11 +20,14 @@ async fn start_daemon() -> (heimdall_daemon::DaemonHandles, TempDir) {
     let blobs = LocalFsBlobStore::open(tmp.path().to_path_buf())
         .await
         .expect("blobs");
+    let mut registry = DutRegistry::new();
+    registry.insert(DutRecord::mock("luna1-1", DutKind::AegisLuna1));
     let bind: std::net::SocketAddr = "127.0.0.1:0".parse().unwrap();
-    let handles = runtime::start(
+    let handles = runtime::start_with_dut_registry(
         bind,
         Arc::new(store) as Arc<dyn JobStore>,
         Arc::new(blobs) as Arc<dyn BlobStore>,
+        Arc::new(registry),
     )
     .await
     .expect("daemon start");

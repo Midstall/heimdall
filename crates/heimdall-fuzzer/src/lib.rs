@@ -15,12 +15,17 @@ pub use corpus::{Corpus, CorpusEntry, VerdictTag};
 pub use coverage::{CoverageDiff, CoverageMap, CoverageSnapshot, DEFAULT_BUCKETS};
 pub use error::{FuzzerError, Result};
 #[cfg(feature = "cranelift")]
-pub use generator::CraneliftGen;
-pub use generator::{RawAsmGen, Rv64};
+pub use generator::{CraneliftGen, CraneliftInitError};
+pub use generator::{
+    EBREAK_INSN, IsaStringError, IsaTag, ParsedIsa, RawAsmGen, Rv32, Rv64, RvExtension,
+    parse_isa_string,
+};
 pub use mutator::{BitFlipMutator, ByteFlipMutator, SpliceMutator};
 pub use scheduler::{PowerScheduler, RoundRobinScheduler};
 
-pub use engine::{DivergenceFinding, FuzzReport, FuzzerEngine, FuzzerEngineBuilder};
+pub use engine::{
+    DivergenceFinding, FuzzReport, FuzzerEngine, FuzzerEngineBuilder, IterCallback, ProgramCallback,
+};
 pub use fuzz_test::AdHocFuzzTest;
 #[cfg(feature = "aegis")]
 pub use generator::BitstreamGen;

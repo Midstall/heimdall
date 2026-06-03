@@ -58,6 +58,7 @@ fn state_label(s: &heimdall_daemon::JobState) -> String {
         JobState::Done(v) => format!("done/{}", verdict_label(v)),
         JobState::Failed(m) => format!("failed: {m}"),
         JobState::Cancelled => "cancelled".into(),
+        JobState::Dead => "dead".into(),
     }
 }
 

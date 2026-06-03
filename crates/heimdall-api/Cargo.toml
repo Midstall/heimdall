@@ -1,0 +1,38 @@
+[package]
+name = "heimdall-api"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "API-side types for the Heimdall daemon HTTP/WS surface. Pure data with serde derives so the same definitions feed every client binding generator (TypeScript today via ts-rs; Python/Go/etc. follow without re-stating the wire shapes)."
+
+[features]
+default = []
+# Enables `#[derive(ts_rs::TS)]` on every wire enum/struct here, plus
+# `heimdall-core/bindings` since several variants reference `State`
+# from there. heimdall-web's build.rs turns this on as a build-dep
+# and runs the export inline so the frontend's TypeScript bindings
+# regenerate on every cargo build, with no need to commit them.
+# Future per-language features (e.g. `python-bindings`, `go-bindings`)
+# slot in alongside this one without touching the types themselves.
+bindings = ["dep:ts-rs", "heimdall-core/bindings"]
+
+[dependencies]
+heimdall-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+uuid.workspace = true
+bytes.workspace = true
+sha2.workspace = true
+hex.workspace = true
+ts-rs = { workspace = true, optional = true, features = [
+  "chrono-impl",
+  "uuid-impl",
+] }

@@ -4,13 +4,19 @@
   commonArgs,
   src,
   cargoArtifacts,
+  python3,
+  heimdall-logo,
 }:
 craneLib.buildPackage (
   commonArgs
   // {
     inherit cargoArtifacts;
 
-    passthru.shell = craneLib.devShell { };
+    passthru.shell = craneLib.devShell {
+      packages = [
+        (python3.withPackages (_: [ heimdall-logo ]))
+      ];
+    };
 
     meta = {
       description = "Heimdall: post-silicon hardware verification suite";

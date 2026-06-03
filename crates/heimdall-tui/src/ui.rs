@@ -56,20 +56,23 @@ pub fn render(frame: &mut Frame, app: &App) {
         View::Campaigns => {
             crate::views::campaigns::render(frame, chunks[1], &app.campaigns, app.focused_index)
         }
-        View::Duts => crate::views::duts::render(frame, chunks[1], &app.duts, app.focused_index),
+        View::Duts => crate::views::duts::render(frame, chunks[1], app, app.focused_index),
         View::JobDetail { id } => {
             let job = app.jobs.iter().find(|j| j.id.0.to_string() == *id);
-            crate::views::job_detail::render(frame, chunks[1], job);
+            let logs = app.logs_for(id);
+            crate::views::job_detail::render(frame, chunks[1], job, logs);
         }
+        View::About => crate::views::about::render(frame, chunks[1], app.about.as_ref()),
     }
 
     // Help bar (bottom)
     let help = format!(
-        " {} | {} | {} | {} | {} | {} | {} | {} ",
+        " {} | {} | {} | {} | {} | {} | {} | {} | {} ",
         t("tui.help.quit"),
         t("tui.help.jobs"),
         t("tui.help.campaigns"),
         t("tui.help.duts"),
+        t("tui.help.about"),
         t("tui.help.move"),
         t("tui.help.open"),
         t("tui.help.back"),
@@ -87,6 +90,7 @@ fn view_label(v: &View) -> String {
         View::Campaigns => t("tui.view.campaigns"),
         View::Duts => t("tui.view.duts"),
         View::JobDetail { .. } => t("tui.view.job_detail"),
+        View::About => t("tui.view.about"),
     }
 }
 
@@ -126,7 +130,7 @@ mod tests {
     #[test]
     fn help_bar_mentions_duts_shortcut() {
         let _g = locale_test_lock();
-        let backend = TestBackend::new(120, 6);
+        let backend = TestBackend::new(160, 6);
         let mut terminal = Terminal::new(backend).unwrap();
         let app = App::new();
         terminal.draw(|f| render(f, &app)).unwrap();
@@ -134,6 +138,46 @@ mod tests {
         assert!(
             dumped.contains("3 duts"),
             "help bar should list `3 duts`:\n{dumped}"
+        );
+        assert!(
+            dumped.contains("4 about"),
+            "help bar should list `4 about`:\n{dumped}"
+        );
+    }
+
+    #[test]
+    fn about_view_renders_version_and_features() {
+        use crate::app::{AboutFeaturesTui, AboutInfoTui, View};
+        let _g = locale_test_lock();
+        let backend = TestBackend::new(80, 12);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let mut app = App::new();
+        app.switch_view(View::About);
+        app.about = Some(AboutInfoTui {
+            version: "9.9.9".into(),
+            build_profile: "release".into(),
+            features: AboutFeaturesTui {
+                sqlite: true,
+                aegis: false,
+                river: true,
+                fuzzer: true,
+                cranelift: false,
+            },
+        });
+        terminal.draw(|f| render(f, &app)).unwrap();
+        let dumped = buf_to_string(terminal.backend().buffer());
+        assert!(
+            dumped.contains("9.9.9"),
+            "about view must render version:\n{dumped}"
+        );
+        // Features alphabetized; aegis/cranelift omitted (off).
+        assert!(
+            dumped.contains("fuzzer, river, sqlite"),
+            "about view must render the enabled features list:\n{dumped}"
+        );
+        assert!(
+            !dumped.contains("aegis"),
+            "disabled features must not appear:\n{dumped}"
         );
     }
 

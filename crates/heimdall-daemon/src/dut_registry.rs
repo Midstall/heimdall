@@ -211,6 +211,87 @@ pub struct DutRecord {
     /// inputs/outputs in the SVG overlay.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub spice_watches: Vec<SpiceWatch>,
+    pub timeouts: DutTimeouts,
+    /// Declared ISA for this DUT. `None` means "no operator-supplied
+    /// info; let the driver probe `misa` via JTAG at examine time,
+    /// falling back to RV32I if even that fails." Populated from a
+    /// `[dut.isa]` block in heimdall.toml.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub isa: Option<IsaSpec>,
+}
+
+/// Declared ISA for a DUT. Mirrors what a `misa` probe over JTAG
+/// would produce: XLEN (32 or 64) plus the set of supported
+/// extensions. Strings like `"rv64imac"` parse into this struct via
+/// `heimdall_fuzzer::parse_isa_string`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct IsaSpec {
+    pub xlen: u8,
+    /// Extensions named by their canonical letter (`i`, `m`, ...) or
+    /// Z-style identifier (`zicsr`, `zifencei`, ...). Serialized as
+    /// strings so the daemon can carry future extensions through
+    /// even if `heimdall_fuzzer::RvExtension` hasn't enumerated them
+    /// yet.
+    pub extensions: Vec<String>,
+}
+
+impl IsaSpec {
+    /// Default ISA when neither config nor probe supplied one: RV32I.
+    pub fn default_rv32i() -> Self {
+        Self {
+            xlen: 32,
+            extensions: vec!["i".into()],
+        }
+    }
+}
+
+/// Forward-compat conversion: take the TOML-mirror `IsaSpec` and
+/// produce a typed [`heimdall_fuzzer::ParsedIsa`] with the
+/// extension strings resolved into [`heimdall_fuzzer::RvExtension`]
+/// values. Unknown extension strings are silently dropped so the
+/// per-DUT config layer keeps working when a future heimdall.toml
+/// names an extension this build doesn't recognise.
+/// [`heimdall_fuzzer::RvExtension::I`] is always included.
+#[cfg(feature = "fuzzer")]
+impl From<&IsaSpec> for heimdall_fuzzer::ParsedIsa {
+    fn from(spec: &IsaSpec) -> Self {
+        let xlen = if spec.xlen == 32 { 32 } else { 64 };
+        heimdall_fuzzer::ParsedIsa::from((xlen, spec.extensions.iter().map(|s| s.as_str())))
+    }
+}
+
+/// Daemon-side mirror of [`heimdall_config::DutTimeouts`]. Carries the
+/// resolved per-DUT timeout values into the worker, factory, and lease
+/// manager.
+#[derive(Debug, Clone, Copy, Serialize)]
+pub struct DutTimeouts {
+    pub openocd_startup_ms: u64,
+    pub openocd_rpc_ms: u64,
+    pub lease_secs: u64,
+    pub wait_halt_max_ms: u64,
+}
+
+impl Default for DutTimeouts {
+    fn default() -> Self {
+        // Matches heimdall_config::DutTimeouts::default().
+        Self {
+            openocd_startup_ms: 10_000,
+            openocd_rpc_ms: 5_000,
+            lease_secs: 60,
+            wait_halt_max_ms: 30_000,
+        }
+    }
+}
+
+impl From<heimdall_config::DutTimeouts> for DutTimeouts {
+    fn from(c: heimdall_config::DutTimeouts) -> Self {
+        Self {
+            openocd_startup_ms: c.openocd_startup_ms,
+            openocd_rpc_ms: c.openocd_rpc_ms,
+            lease_secs: c.lease_secs,
+            wait_halt_max_ms: c.wait_halt_max_ms,
+        }
+    }
 }
 
 /// Daemon-side mirror of [`heimdall_config::SpiceWatchCfg`]. Lives here so
@@ -272,6 +353,26 @@ where
         seq.serialize_element(v)?;
     }
     seq.end()
+}
+
+impl DutRecord {
+    /// Build a minimal `DutRecord` with the given id+kind and a `Mock`
+    /// transport. Intended for tests that need the daemon's HTTP /jobs route
+    /// to resolve a `DutId` without loading a full ConfigFile.
+    pub fn mock(id: impl Into<String>, kind: DutKind) -> Self {
+        Self {
+            id: DutId::new(id),
+            kind,
+            chip_serial: None,
+            jtag: TransportSpec::Mock,
+            pad_map: IoPinmap::default(),
+            bringup: None,
+            netlist: None,
+            spice_watches: Vec::new(),
+            timeouts: DutTimeouts::default(),
+            isa: None,
+        }
+    }
 }
 
 impl DutRegistry {
@@ -510,6 +611,11 @@ pub fn build_registry_with_root(
             bringup,
             netlist,
             spice_watches,
+            timeouts: d.timeouts.into(),
+            isa: d.isa.as_ref().map(|cfg| IsaSpec {
+                xlen: cfg.xlen,
+                extensions: cfg.extensions.clone(),
+            }),
         });
     }
 
@@ -676,6 +782,8 @@ mod tests {
             bringup: None,
             netlist: None,
             spice_watches: vec![],
+            timeouts: Default::default(),
+            isa: None,
         }
     }
 
@@ -1055,6 +1163,8 @@ mod tests {
                 }),
                 netlist: None,
                 spice_watches: vec![],
+                timeouts: Default::default(),
+                isa: None,
             }],
             transport: TransportSection {
                 jtag: vec![jtag_mock("jtag.mock")],
@@ -1101,6 +1211,8 @@ mod tests {
                 }),
                 netlist: None,
                 spice_watches: vec![],
+                timeouts: Default::default(),
+                isa: None,
             }],
             transport: TransportSection {
                 jtag: vec![jtag_mock("jtag.mock")],

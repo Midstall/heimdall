@@ -55,7 +55,7 @@ async fn main() -> Result<()> {
     match cli.command {
         cli::Cmd::Probe(args) => cmd::probe::run(args, cli.config).await,
         cli::Cmd::Run(args) => cmd::run::run(args, cli.config).await,
-        cli::Cmd::Fuzz(args) => cmd::fuzz::run(args, cli.config).await,
+        cli::Cmd::Fuzz(args) => cmd::fuzz::run(args, cli.config, &cli.daemon_url).await,
         cli::Cmd::Daemon(daemon_cmd) => match daemon_cmd {
             cli::DaemonCmd::Serve(args) => cmd::daemon::serve(args, cli.config).await,
             cli::DaemonCmd::Dump(args) => cmd::daemon::dump(args).await,

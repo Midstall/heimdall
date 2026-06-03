@@ -39,6 +39,8 @@ async fn river_openocd_spawn_failure_surfaces_as_job_failed() {
             bringup: None,
             netlist: None,
             spice_watches: vec![],
+            timeouts: Default::default(),
+            isa: None,
         }],
         transport: TransportSection {
             jtag: vec![JtagTransportCfg {

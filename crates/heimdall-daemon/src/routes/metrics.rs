@@ -35,6 +35,7 @@ async fn metrics(State(app): State<AppState>) -> impl IntoResponse {
     let mut done = 0u64;
     let mut failed = 0u64;
     let mut cancelled = 0u64;
+    let mut dead = 0u64;
     let mut verdict_pass = 0u64;
     let mut verdict_fail = 0u64;
     let mut verdict_skip = 0u64;
@@ -54,6 +55,7 @@ async fn metrics(State(app): State<AppState>) -> impl IntoResponse {
             }
             JobState::Failed(_) => failed += 1,
             JobState::Cancelled => cancelled += 1,
+            JobState::Dead => dead += 1,
         }
     }
 
@@ -80,7 +82,8 @@ async fn metrics(State(app): State<AppState>) -> impl IntoResponse {
          heimdall_jobs{{state=\"running\"}} {running}\n\
          heimdall_jobs{{state=\"done\"}} {done}\n\
          heimdall_jobs{{state=\"failed\"}} {failed}\n\
-         heimdall_jobs{{state=\"cancelled\"}} {cancelled}"
+         heimdall_jobs{{state=\"cancelled\"}} {cancelled}\n\
+         heimdall_jobs{{state=\"dead\"}} {dead}"
     );
     let _ = writeln!(
         body,

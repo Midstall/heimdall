@@ -5,6 +5,7 @@ pub use heimdall_config as config;
 pub use heimdall_core as core;
 pub use heimdall_driver as driver;
 pub use heimdall_golden as golden;
+pub use heimdall_i18n as i18n;
 pub use heimdall_test as test;
 pub use heimdall_tools as tools;
 pub use heimdall_transport as transport;
@@ -15,7 +16,10 @@ pub use heimdall_core::{
 };
 pub use heimdall_driver::{Dut, MockDriver, TestDriver};
 pub use heimdall_golden::{GoldenModel, MockGoldenModel};
-pub use heimdall_test::{BuildCtx, Plan, RunResult, Runner, Test};
+pub use heimdall_test::{
+    BuildCtx, Plan, RunResult, Runner, SnapshotSource, Stage, StageMessage, StageObserver, Test,
+    TestError,
+};
 pub use heimdall_tools::{TargetSpec, Tool, ToolChain, ToolOpts};
 pub use heimdall_transport::{JtagOps, ResetTarget, SerialOps, Transport, TransportKind};
 

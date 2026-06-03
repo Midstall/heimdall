@@ -14,4 +14,8 @@ pub enum DriverError {
     IdcodeMismatch { got: u32, expected: u32 },
     #[error("driver state error: {0}")]
     State(&'static str),
+    /// Parse/protocol-level failure that isn't a transport or tool error.
+    /// Used for malformed ELF inputs, unparseable OpenOCD replies, etc.
+    #[error("protocol: {0}")]
+    Protocol(String),
 }

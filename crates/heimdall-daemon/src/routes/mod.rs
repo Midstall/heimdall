@@ -1,4 +1,6 @@
+pub mod about;
 pub mod campaigns;
+pub mod disasm;
 pub mod duts;
 pub mod events;
 pub mod health;

@@ -85,9 +85,7 @@ class FontLoader:
         letter_spacing: float = 0,
     ) -> float:
         scale = font_size / self._units_per_em
-        paths, total_width, ascent = self.text_to_paths(
-            text, font_size, letter_spacing
-        )
+        paths, total_width, ascent = self.text_to_paths(text, font_size, letter_spacing)
         for path_d, x_offset in paths:
             doc.path(
                 parent,

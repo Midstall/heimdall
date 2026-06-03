@@ -1,0 +1,937 @@
+/* Tokyo Night palette (public). Derived from enkia/tokyo-night-vscode-theme. */
+:root {
+  --bg-base: #1a1b26;
+  --bg-dark: #16161e;
+  --bg-medium: #1e202e;
+  --fg-primary: #a9b1d6;
+  --fg-bright: #c0caf5;
+  --fg-muted: #787c99;
+  --fg-dim: #545c7e;
+  --accent-blue: #7aa2f7;
+  --accent-blue-light: #7dcfff;
+  --accent-cyan: #2ac3de;
+  --accent-teal: #73daca;
+  --accent-green: #9ece6a;
+  --accent-purple: #bb9af7;
+  --accent-red: #f7768e;
+  --accent-red-dark: #db4b4b;
+  --accent-orange: #ff9e64;
+  --accent-yellow: #e0af68;
+
+  --verdict-pass: var(--accent-green);
+  --verdict-fail: var(--accent-red);
+  --verdict-skip: var(--accent-yellow);
+  --verdict-error: var(--accent-red-dark);
+  --state-running: var(--accent-blue);
+  --state-queued: var(--fg-muted);
+  --state-cancelled: var(--fg-dim);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg-base);
+  color: var(--fg-primary);
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    sans-serif;
+  font-size: 14px;
+}
+
+/* Reserve room for the fixed `.helpbar` (~0.4rem padding + 12px text +
+ * border = ~1.7rem). Without this, content scrolled all the way down
+ * runs underneath the footer. Add a hair of breathing room beyond the
+ * raw footer height so the last row of a register table or job list
+ * isn't visually pressed against the helpbar's top edge.
+ */
+body {
+  padding-bottom: 2.5rem;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 0.75rem 1rem;
+  background: var(--bg-dark);
+  border-bottom: 1px solid var(--bg-medium);
+}
+
+.brand {
+  color: var(--fg-bright);
+  font-weight: 700;
+  letter-spacing: 0.18em;
+}
+
+.status {
+  color: var(--fg-muted);
+  flex: 1;
+}
+
+.banner {
+  color: var(--accent-orange);
+  font-size: 12px;
+  letter-spacing: 0.05em;
+}
+
+.tabs {
+  display: flex;
+  gap: 0;
+  background: var(--bg-medium);
+  border-bottom: 1px solid var(--bg-dark);
+}
+
+.tab {
+  background: transparent;
+  color: var(--fg-muted);
+  border: none;
+  padding: 0.5rem 1rem;
+  font: inherit;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+
+.tab.active {
+  color: var(--fg-bright);
+  border-bottom-color: var(--accent-blue);
+}
+
+.tab:hover {
+  color: var(--fg-primary);
+}
+
+main {
+  padding: 1rem;
+}
+
+.view.hidden {
+  display: none;
+}
+.hidden {
+  display: none !important;
+}
+
+/* ---------- toolbar + new-job panel ---------- */
+
+.toolbar {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.btn {
+  background: var(--bg-medium);
+  color: var(--fg-bright);
+  border: 1px solid var(--bg-dark);
+  border-radius: 3px;
+  padding: 0.35rem 0.9rem;
+  font: inherit;
+  cursor: pointer;
+}
+.btn:hover {
+  background: var(--bg-dark);
+}
+.btn-primary {
+  background: var(--accent-blue);
+  color: var(--bg-base);
+  border-color: var(--accent-blue);
+}
+.btn-primary:hover {
+  background: var(--accent-blue-light);
+  border-color: var(--accent-blue-light);
+}
+
+.btn-cancel {
+  background: transparent;
+  color: var(--accent-orange);
+  border: 1px solid var(--accent-orange);
+  padding: 0.1rem 0.4rem;
+  font-size: 11px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+.btn-cancel:hover {
+  color: var(--bg-base);
+  background: var(--accent-orange);
+}
+
+.btn-restart {
+  background: transparent;
+  color: var(--accent-blue);
+  border: 1px solid var(--accent-blue);
+  padding: 0.1rem 0.4rem;
+  font-size: 11px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+.btn-restart:hover {
+  color: var(--bg-base);
+  background: var(--accent-blue);
+}
+
+.btn-row-delete {
+  background: transparent;
+  color: var(--accent-red);
+  border: 1px solid var(--accent-red);
+  padding: 0.1rem 0.4rem;
+  font-size: 11px;
+  border-radius: 3px;
+  cursor: pointer;
+  margin-left: 0.3rem;
+}
+.btn-row-delete:hover {
+  color: var(--bg-base);
+  background: var(--accent-red);
+}
+
+.jobs-pager {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 0.8rem;
+  border-top: 1px solid var(--bg-dark);
+  background: var(--bg-medium);
+}
+.jobs-pager .btn[disabled] {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.jobs-page {
+  color: var(--fg-muted);
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+}
+.jobs-pager-spacer {
+  flex: 1;
+}
+
+.prune-dialog {
+  background: var(--bg-medium);
+  color: var(--fg-primary);
+  border: 1px solid var(--bg-dark);
+  border-radius: 4px;
+  padding: 1.2rem 1.5rem;
+  min-width: 340px;
+}
+.prune-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.55);
+}
+.prune-dialog h3 {
+  margin: 0 0 0.5rem;
+  color: var(--fg-bright);
+  letter-spacing: 0.05em;
+}
+.prune-dialog p {
+  color: var(--fg-muted);
+  margin: 0 0 1rem;
+  font-size: 12px;
+}
+.prune-dialog label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+.prune-dialog input {
+  width: 6rem;
+  background: var(--bg-dark);
+  color: var(--fg-bright);
+  border: 1px solid var(--bg-medium);
+  padding: 0.3rem 0.5rem;
+  border-radius: 3px;
+  font-family: ui-monospace, monospace;
+}
+.prune-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.new-job-panel {
+  background: var(--bg-medium);
+  border: 1px solid var(--bg-dark);
+  padding: 0.75rem 1rem;
+  margin-bottom: 0.75rem;
+  border-radius: 4px;
+}
+.new-job-panel fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0 0 0.5rem 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.5rem;
+}
+.new-job-panel label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 12px;
+  color: var(--fg-primary);
+}
+.new-job-panel label span {
+  color: var(--fg-muted);
+}
+.new-job-panel input,
+.new-job-panel select,
+.new-job-panel textarea {
+  background: var(--bg-base);
+  color: var(--fg-bright);
+  border: 1px solid var(--bg-dark);
+  border-radius: 3px;
+  padding: 0.3rem 0.5rem;
+  font: inherit;
+  transition: border-color 120ms ease;
+}
+.new-job-panel input:hover,
+.new-job-panel select:hover,
+.new-job-panel textarea:hover {
+  border-color: var(--fg-dim);
+}
+.new-job-panel input:focus,
+.new-job-panel select:focus,
+.new-job-panel textarea:focus {
+  outline: none;
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 0 1px var(--accent-blue);
+}
+
+/* Strip the platform-default select chrome and paint our own
+   chevron so the dropdowns sit in the Tokyo Night palette instead
+   of inheriting the browser's white-on-grey defaults. The chevron
+   is an inline-SVG data URL so it pays no extra request and stays
+   crisp at any zoom. The actual popup panel is still browser-
+   controlled (no CSS reaches inside `<option>` rendering on most
+   engines), but the closed state is what users look at 99% of the
+   time. */
+.new-job-panel select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' stroke='%23a9b1d6' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 0.6rem center;
+  padding-right: 1.8rem;
+  cursor: pointer;
+}
+.new-job-panel select option {
+  background: var(--bg-medium);
+  color: var(--fg-bright);
+}
+
+/* Hide the platform-default number spinners. They render in
+   browser-chrome styling that fights the Tokyo Night palette and
+   can't be themed via CSS (engines deliberately limit
+   `::-webkit-inner-spin-button` and Firefox exposes nothing at
+   all). Operators get the same up/down behaviour via the keyboard
+   arrows + mouse-wheel scroll on a focused field. */
+.new-job-panel input[type="number"] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+.new-job-panel input[type="number"]::-webkit-inner-spin-button,
+.new-job-panel input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  appearance: none;
+  margin: 0;
+}
+
+/* File-input chrome: the actual "no file chosen" label after the
+   button is browser-locale-controlled and not stylable, but the
+   button half is, via the (now widely supported)
+   ::file-selector-button pseudo. Match the Tokyo Night accent so
+   the picker reads as part of the form, not a stray native widget. */
+.new-job-panel input[type="file"] {
+  padding: 0.2rem 0.3rem;
+  cursor: pointer;
+}
+.new-job-panel input[type="file"]::file-selector-button {
+  background: var(--bg-medium);
+  color: var(--accent-blue);
+  border: 1px solid var(--accent-blue);
+  border-radius: 3px;
+  padding: 0.2rem 0.8rem;
+  margin-right: 0.6rem;
+  font: inherit;
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
+}
+.new-job-panel input[type="file"]::file-selector-button:hover {
+  background: var(--accent-blue);
+  color: var(--bg-base);
+}
+.new-job-panel label.checkbox-row {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+}
+/* Checkbox-row spans ARE the control label (not a hint above an
+   input), so they get the brighter primary foreground instead of
+   the muted color the field-label spans inherit. */
+.new-job-panel label.checkbox-row span {
+  color: var(--fg-primary);
+}
+
+/* Custom checkbox. Strip the browser-default white box and paint a
+   Tokyo Night square with a teal check on the `:checked` state.
+   The check is an inline-SVG background so it stays crisp at any
+   zoom and pays no extra request. */
+.new-job-panel input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 1rem;
+  height: 1rem;
+  background: var(--bg-base);
+  border: 1px solid var(--bg-dark);
+  border-radius: 3px;
+  cursor: pointer;
+  margin: 0;
+  display: inline-grid;
+  place-content: center;
+  transition:
+    border-color 120ms ease,
+    background-color 120ms ease;
+}
+.new-job-panel input[type="checkbox"]:hover {
+  border-color: var(--accent-teal);
+}
+.new-job-panel input[type="checkbox"]:checked {
+  background: var(--accent-teal);
+  border-color: var(--accent-teal);
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='8' viewBox='0 0 10 8'><path d='M1 4l3 3 5-6' stroke='%231a1b26' stroke-width='1.8' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  background-repeat: no-repeat;
+  background-position: center;
+}
+.new-job-panel input[type="checkbox"]:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 1px var(--accent-teal);
+}
+.nj-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-top: 0.5rem;
+}
+.nj-error {
+  color: var(--accent-red);
+  font-size: 12px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--bg-medium);
+}
+
+th,
+td {
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--bg-dark);
+}
+
+th {
+  color: var(--fg-bright);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+
+td.id {
+  color: var(--fg-muted);
+  font-family: ui-monospace, monospace;
+}
+
+/* Clamp the job-state cell so long error messages (e.g. "fuzz dispatch
+   requested generator=cranelift but the daemon was built without...")
+   don't reflow the entire row to two or three lines. The full text is
+   still available via the cell's `title` tooltip. */
+.state-cell {
+  max-width: 22rem;
+}
+.state-cell .state-text {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
+.empty td {
+  color: var(--fg-dim);
+  text-align: center;
+  padding: 1rem;
+}
+
+.state-queued {
+  color: var(--state-queued);
+}
+.state-running {
+  color: var(--state-running);
+}
+.state-done.verdict-pass {
+  color: var(--verdict-pass);
+}
+.state-done.verdict-fail {
+  color: var(--verdict-fail);
+}
+.state-done.verdict-skip {
+  color: var(--verdict-skip);
+}
+.state-done.verdict-error {
+  color: var(--verdict-error);
+}
+.state-failed {
+  color: var(--verdict-error);
+}
+.state-cancelled {
+  color: var(--state-cancelled);
+}
+.state-dead {
+  color: var(--accent-red);
+  font-style: italic;
+}
+
+.campaign-state-pending {
+  color: var(--state-queued);
+}
+.campaign-state-running {
+  color: var(--state-running);
+}
+.campaign-state-pass {
+  color: var(--verdict-pass);
+}
+.campaign-state-fail {
+  color: var(--verdict-fail);
+}
+.campaign-state-mixed {
+  color: var(--accent-orange);
+}
+.campaign-state-cancelled {
+  color: var(--state-cancelled);
+}
+
+.empty-block {
+  color: var(--fg-dim);
+  text-align: center;
+  padding: 2rem;
+}
+
+.dut-card {
+  background: var(--bg-medium);
+  border: 1px solid var(--bg-dark);
+  border-radius: 4px;
+  margin-bottom: 0.75rem;
+  padding: 0.75rem 1rem;
+}
+
+.dut-header {
+  display: flex;
+  gap: 1.5rem;
+  align-items: baseline;
+}
+
+.dut-id {
+  color: var(--fg-bright);
+  font-weight: 600;
+  font-family: ui-monospace, monospace;
+}
+
+.dut-kind {
+  color: var(--accent-blue);
+}
+
+.dut-serial,
+.dut-jtag {
+  color: var(--fg-muted);
+  font-size: 12px;
+}
+
+.dut-status {
+  margin-left: auto;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 0.15rem 0.55rem;
+  border-radius: 3px;
+  border: 1px solid currentColor;
+  font-family: ui-monospace, monospace;
+}
+
+.dut-status-connected {
+  color: var(--accent-green);
+}
+
+.dut-status-disconnected {
+  color: var(--accent-red);
+}
+
+.dut-status-idle {
+  color: var(--fg-dim);
+}
+
+.dut-status-in-use {
+  color: var(--accent-yellow);
+}
+
+.dut-state-panel {
+  margin-top: 0.5rem;
+  border-top: 1px dotted var(--bg-medium);
+  padding-top: 0.4rem;
+}
+
+.dut-isa {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  flex-wrap: wrap;
+  font-family: ui-monospace, monospace;
+}
+.dut-isa-label {
+  color: var(--fg-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 11px;
+}
+.dut-isa-xlen {
+  color: var(--accent-cyan);
+  font-weight: 600;
+  font-size: 12px;
+}
+.dut-isa-chips {
+  display: flex;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+}
+.dut-isa-ext {
+  background: var(--bg-dark);
+  color: var(--accent-teal);
+  padding: 0.1rem 0.45rem;
+  border-radius: 3px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  border: 1px solid var(--bg-medium);
+}
+.dut-isa-source {
+  margin-left: auto;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  padding: 0.05rem 0.4rem;
+  border-radius: 3px;
+  border: 1px solid currentColor;
+}
+.dut-isa-source-probe {
+  color: var(--accent-green);
+}
+.dut-isa-source-config {
+  color: var(--accent-blue);
+}
+.dut-isa-unknown .dut-isa-empty {
+  color: var(--fg-dim);
+  font-style: italic;
+  font-size: 11px;
+}
+
+.dut-state-panel summary {
+  cursor: pointer;
+  user-select: none;
+  color: var(--fg-muted);
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+}
+
+.reg-source {
+  color: var(--accent-yellow);
+  text-transform: uppercase;
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+}
+
+.reg-ts {
+  color: var(--fg-muted);
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+}
+
+.dut-regs {
+  margin-top: 0.4rem;
+  border-collapse: collapse;
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  width: 100%;
+}
+
+.dut-regs td {
+  padding: 0.1rem 0.5rem;
+  border-bottom: 1px dotted var(--bg-medium);
+}
+
+.reg-name {
+  color: var(--fg-bright);
+  width: 9rem;
+  white-space: nowrap;
+}
+
+.reg-abi {
+  color: var(--fg-bright);
+  margin-right: 0.5rem;
+}
+
+.reg-hw {
+  color: var(--fg-muted);
+  font-size: 11px;
+}
+
+.reg-val {
+  color: var(--accent-yellow);
+  white-space: nowrap;
+}
+
+.netlist-panel {
+  margin-top: 0.5rem;
+}
+
+.netlist-panel summary {
+  cursor: pointer;
+  color: var(--accent-blue-light);
+  padding: 0.25rem 0;
+  user-select: none;
+}
+
+.netlist-panel summary:hover {
+  color: var(--fg-bright);
+}
+
+.netlist-svg {
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  background: var(--bg-base);
+  border: 1px solid var(--bg-dark);
+  border-radius: 4px;
+  overflow: auto;
+}
+
+.netlist-svg img {
+  display: block;
+  max-width: 100%;
+}
+
+/* ---------- job log timeline ---------- */
+
+.job-row {
+  cursor: pointer;
+}
+.job-row:hover {
+  background: var(--bg-medium);
+}
+
+.about-panel {
+  padding: 1rem 1.5rem;
+}
+.about-panel h2 {
+  color: var(--fg-bright);
+  letter-spacing: 0.05em;
+  margin: 0 0 1rem;
+}
+.about-grid {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.4rem 1.5rem;
+  margin: 0;
+}
+.about-grid dt {
+  color: var(--fg-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 11px;
+  align-self: center;
+}
+.about-grid dd {
+  margin: 0;
+  color: var(--fg-bright);
+  font-family: ui-monospace, monospace;
+}
+
+.job-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1em;
+  margin-right: 0.4rem;
+  color: var(--fg-muted);
+}
+
+/* Icon sizing inside the action buttons + row toggle. The Lucide
+   font ships glyphs at the body em-size. The buttons want them a
+   hair smaller so they don't dwarf the row height. */
+.btn-cancel .lucide,
+.btn-restart .lucide {
+  font-size: 13px;
+  vertical-align: middle;
+}
+.job-toggle .lucide {
+  font-size: 14px;
+}
+
+.job-log-row > td {
+  padding: 0;
+  background: var(--bg-base);
+}
+
+.job-log {
+  max-height: 320px;
+  overflow: auto;
+  padding: 0.5rem 1rem;
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+}
+
+.job-log-empty {
+  color: var(--fg-muted);
+}
+
+.log-line {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+  padding: 0.1rem 0;
+  border-bottom: 1px dotted var(--bg-medium);
+}
+
+.log-level {
+  display: inline-block;
+  width: 5ch;
+  color: var(--fg-muted);
+  text-transform: uppercase;
+}
+.log-level-trace {
+  color: var(--fg-muted);
+}
+.log-level-debug {
+  color: var(--accent-blue-light, var(--fg-muted));
+}
+.log-level-info {
+  color: var(--fg-bright);
+}
+.log-level-warn {
+  color: var(--accent-orange);
+}
+.log-level-error {
+  color: var(--accent-red);
+}
+
+.log-stage {
+  color: var(--accent-yellow);
+  margin-right: 0.25rem;
+}
+
+.log-ts {
+  display: inline-block;
+  margin-right: 0.5rem;
+  color: var(--fg-muted);
+}
+
+/* ---------- job disassembly panel ---------- */
+
+.job-disasm {
+  max-height: 320px;
+  overflow: auto;
+  padding: 0.5rem 1rem;
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  border-top: 1px solid var(--bg-medium);
+}
+
+.job-disasm-empty {
+  color: var(--fg-muted);
+}
+
+.disasm-header {
+  display: flex;
+  gap: 0.75rem;
+  align-items: baseline;
+  padding-bottom: 0.4rem;
+}
+
+.disasm-title {
+  color: var(--fg-bright);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  font-size: 11px;
+}
+
+.disasm-meta {
+  color: var(--fg-muted);
+  font-size: 11px;
+}
+.disasm-iter {
+  color: var(--accent-teal);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+}
+
+.disasm-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: transparent;
+}
+
+.disasm-table td {
+  padding: 0.1rem 0.5rem;
+  border-bottom: none;
+  vertical-align: top;
+}
+
+.disasm-addr {
+  color: var(--fg-muted);
+  width: 12ch;
+}
+.disasm-bytes {
+  color: var(--fg-dim);
+  width: 14ch;
+  white-space: nowrap;
+}
+.disasm-mnemonic {
+  color: var(--accent-blue-light);
+  width: 10ch;
+}
+.disasm-operands {
+  color: var(--fg-primary);
+}
+
+.disasm-pc-hit {
+  background: var(--bg-medium);
+  border-left: 2px solid var(--accent-orange);
+}
+.disasm-pc-hit .disasm-addr {
+  color: var(--accent-orange);
+}
+.disasm-pc-hit .disasm-mnemonic {
+  color: var(--accent-orange);
+}
+
+.helpbar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--bg-dark);
+  color: var(--fg-muted);
+  display: flex;
+  justify-content: space-between;
+  padding: 0.4rem 1rem;
+  font-size: 12px;
+  border-top: 1px solid var(--bg-medium);
+}

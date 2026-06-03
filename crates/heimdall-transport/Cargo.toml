@@ -36,4 +36,3 @@ futures = { workspace = true, optional = true }
 # rather than failing the build.
 [target.'cfg(target_os = "linux")'.dependencies]
 gpiocdev = { workspace = true, optional = true }
-

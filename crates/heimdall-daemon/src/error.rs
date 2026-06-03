@@ -18,6 +18,9 @@ pub enum DaemonError {
     Golden(#[from] heimdall_golden::GoldenError),
     #[error("test: {0}")]
     Test(#[from] heimdall_test::TestError),
+    #[cfg(feature = "fuzzer")]
+    #[error("fuzzer: {0}")]
+    Fuzzer(#[from] heimdall_fuzzer::FuzzerError),
     #[error("unknown job id {0}")]
     UnknownJob(String),
     #[error("unknown dut id {0}")]
@@ -30,6 +33,21 @@ pub enum DaemonError {
     Unsupported(&'static str),
     #[error("dump format: {0}")]
     DumpFormat(String),
+    /// The job was cancelled mid-flight (operator hit the cancel
+    /// button on a running job). Drives the terminal transition to
+    /// `JobState::Cancelled` instead of `Failed`.
+    #[error("job cancelled by operator")]
+    Cancelled,
+    #[error("daemon built without the `fuzzer` feature; rebuild with --features fuzzer")]
+    FuzzerFeatureDisabled,
+    #[error(
+        "fuzz dispatch requested generator=cranelift but the daemon was built \
+         without the `cranelift` feature; rebuild with --features cranelift"
+    )]
+    CraneliftFeatureDisabled,
+    #[cfg(all(feature = "fuzzer", feature = "cranelift"))]
+    #[error("cranelift init: {0}")]
+    CraneliftInit(#[from] heimdall_fuzzer::CraneliftInitError),
 }
 
 pub type Result<T> = std::result::Result<T, DaemonError>;
