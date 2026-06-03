@@ -2,9 +2,7 @@
 
 #![cfg(feature = "river")]
 
-mod common;
-
-use common::mock_openocd::MockOpenOcdServer;
+use heimdall_mock_openocd::MockOpenOcdServer;
 use heimdall_transport::Transport;
 use heimdall_transport::openocd::OpenOcdJtagTransport;
 

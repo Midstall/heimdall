@@ -14,13 +14,13 @@ description = "Golden reference models for Heimdall: spike RISC-V ISS, Aegis sim
 
 [features]
 default = []
-spike = []
+spike = ["dep:elf"]
 aegis = ["dep:aegis-ip", "dep:aegis-sim", "dep:serde_json"]
 spice = []
 
 [dependencies]
 heimdall-core.workspace = true
-aegis-ip  = { workspace = true, optional = true }
+aegis-ip = { workspace = true, optional = true }
 aegis-sim = { workspace = true, optional = true }
 async-trait.workspace = true
 thiserror.workspace = true
@@ -28,6 +28,7 @@ tracing.workspace = true
 tokio = { workspace = true }
 serde_json = { workspace = true, optional = true }
 tempfile.workspace = true
+elf = { workspace = true, optional = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

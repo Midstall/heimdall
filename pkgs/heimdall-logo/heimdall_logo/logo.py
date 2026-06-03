@@ -41,15 +41,22 @@ class Logo:
         doc.linear_gradient(
             "heimdall-grad",
             self.palette.gradient_stops(),
-            x1=0, y1=0, x2=total_width, y2=total_height,
+            x1=0,
+            y1=0,
+            x2=total_width,
+            y2=total_height,
         )
 
         if background is not None:
             doc.rect(
                 doc.root,
-                0, 0, total_width, total_height,
+                0,
+                0,
+                total_width,
+                total_height,
                 fill=background,
-                rx=18, ry=18,
+                rx=18,
+                ry=18,
             )
 
         # Logomark centered horizontally.

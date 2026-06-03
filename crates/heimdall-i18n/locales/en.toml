@@ -13,6 +13,9 @@ shutting_down = "shutting down"
 no_config = "no --config provided; running with empty DUT registry"
 loaded_config = "loaded heimdall.toml: host={host} duts={duts}"
 non_loopback_bind = "binding non-loopback address {addr}; no auth, trusted env only"
+reconcile_dead = "boot-time reconcile: marking running job {job} as dead (prior daemon exited mid-flight)"
+reconcile_requeue = "boot-time reconcile: re-queuing stranded queued job {job}"
+reconcile_summary = "boot-time reconcile: {dead} dead, {requeued} re-queued"
 
 [log.dump]
 complete = "dump complete: {jobs} jobs, {campaigns} campaigns, {events} events, {blobs} blobs"
@@ -30,6 +33,7 @@ loading = "loading..."
 connected = "connected"
 disconnected = "disconnected"
 idle = "idle"
+in_use = "in use"
 connecting = "connecting..."
 
 [tui]
@@ -51,22 +55,66 @@ jobs = "jobs"
 campaigns = "campaigns"
 duts = "duts"
 job_detail = "job-detail"
+about = "about"
 
 [tui.help]
 quit = "q quit"
 jobs = "1 jobs"
 campaigns = "2 campaigns"
 duts = "3 duts"
+about = "4 about"
 move = "j/k move"
 open = "enter open"
 back = "esc back"
 refresh = "r refresh"
+
+[tui.about]
+heading = "About this daemon"
+version = "Version"
+build_profile = "Build"
+features = "Features"
+no_features = "none"
+loading = "loading..."
+
+[tui.about.profile]
+debug = "debug"
+release = "release"
 
 [tui.jobs]
 title = "Jobs"
 col_id = "Id"
 col_dut = "DUT"
 col_state = "State"
+col_kind = "Kind"
+col_created = "Created"
+
+# Display label per JobKind tag (kebab-case wire string -> human label).
+# Used by the web UI's job table and TUI's job list.
+[tui.job_kind]
+"mock-hello" = "mock-hello"
+"load-aegis-bitstream" = "load aegis bitstream"
+"run-aegis-vector" = "run aegis vector"
+"boot-river-elf" = "boot river elf"
+fuzz = "fuzz"
+named = "named"
+
+# Display label per JobState tag (queued / running / done / failed /
+# cancelled). The "done" tag pairs with a verdict tag from [tui.verdict]
+# to form labels like "done/pass".
+[tui.job_state]
+queued = "queued"
+running = "running"
+done = "done"
+failed = "failed"
+cancelled = "cancelled"
+dead = "dead (daemon restart)"
+
+# Display label per verdict tag.
+[tui.verdict]
+pass = "pass"
+fail = "fail"
+skip = "skip"
+error = "error"
 
 [tui.campaigns]
 title = "Campaigns"
@@ -84,6 +132,11 @@ col_jtag = "JTAG"
 col_status = "Status"
 col_lease = "Lease"
 leased_by = "leased ({holder})"
+snapshot_title = "Register snapshot"
+snapshot_select = "(select a DUT to view registers)"
+snapshot_none = "no register snapshot yet"
+source_dut = "dut"
+source_golden = "golden"
 
 [tui.empty]
 no_jobs = "no jobs"
@@ -99,12 +152,143 @@ banner_trusted_env = "trusted-environment deployment, no auth"
 jobs = "Jobs"
 campaigns = "Campaigns"
 duts = "DUTs"
+about = "About"
+
+[web.about]
+heading = "About this daemon"
+version = "Version"
+build_profile = "Build"
+features = "Features"
+no_features = "none"
+load_failed = "load failed: {error}"
+
+[web.about.profile]
+debug = "debug"
+release = "release"
 
 [web.duts]
 show_netlist = "Show netlist"
 jtag_prefix = "jtag:"
 no_duts = "no DUTs configured"
+source_dut = "dut"
+source_golden = "golden"
+no_snapshot = "no register snapshot yet"
+isa = "ISA"
+isa_unknown = "unknown"
+
+[web.duts.isa_source]
+probe = "probed"
+config = "configured"
 
 [web.help]
-shortcuts = "1/2/3 to switch views"
+shortcuts = "1/2/3/4 to switch views"
 live_updates = "refreshes via /events websocket"
+
+[web.jobs]
+no_logs = "no log events yet"
+disasm_title = "Disassembly"
+disasm_loading = "loading disassembly..."
+disasm_iter = "iter"
+cancel = "cancel"
+cancel_failed = "cancel failed: {error}"
+restart = "restart"
+restart_glyph = "↻"
+restart_failed = "restart failed: {error}"
+delete = "delete"
+delete_confirm = "Delete job {id}? This cannot be undone."
+delete_failed = "delete failed: {error}"
+prev = "‹ Prev"
+next = "Next ›"
+page = "page {page} of {pages} ({total} total)"
+prune = "Prune old…"
+prune_title = "Prune old jobs"
+prune_help = "Removes every terminal job (done, failed, cancelled, dead) older than the given number of days. In-flight jobs are never touched."
+prune_older_than = "Older than"
+prune_days = "day(s)"
+prune_cancel = "Cancel"
+prune_confirm = "Prune"
+prune_done = "Pruned {count} job(s)."
+prune_failed = "prune failed: {error}"
+
+# New-job inline panel + form-field labels. Mirror keys exist in
+# ja.toml; keep them in lockstep when adding fields.
+[web.new_job]
+open = "New Job"
+submit = "Submit"
+cancel = "Cancel"
+dut = "DUT"
+kind = "Kind"
+submit_failed = "submit failed: {error}"
+no_duts = "no DUTs configured; add one to heimdall.toml before submitting"
+invalid_json = "payload is not valid JSON"
+file_required = "file required"
+
+[web.new_job.fuzz]
+iterations = "iterations"
+seed = "seed"
+insn_count = "instructions per program"
+cycles = "wait_halt cycles"
+generator = "generator"
+strict_coverage = "strict coverage divergence flips Pass -> Fail"
+
+[web.new_job.boot_river_elf]
+elf = "ELF image"
+cycles = "wait_halt cycles"
+
+[web.new_job.aegis]
+descriptor = "descriptor (JSON)"
+bitstream = "bitstream"
+inputs = "inputs (name=true/false, one per line)"
+expected_outputs = "expected outputs (name=true/false)"
+settle_cycles = "settle cycles"
+
+[web.new_job.named]
+name = "name"
+payload = "payload (JSON)"
+
+# Disassembly-route error messages. The daemon returns these as
+# i18n_key+args envelopes so the frontend localizes them in the
+# operator's language, matching the JobLog event pattern.
+[web.disasm.error]
+no_iter_yet = "fuzz job has not loaded any iter yet; check back once the first iter generates a program"
+aegis_unsupported = "aegis bitstream rendering is not yet supported; a netlist->Verilog renderer is the planned path"
+no_program = "job kind `{kind}` has no executable program to disassemble"
+elf_decode = "elf_b64 decode failed: {detail}"
+
+[log.stage]
+build = "build"
+compile = "compile"
+prepare = "prepare"
+golden-reset = "golden reset"
+golden-load = "golden load"
+load = "load"
+run = "run"
+golden-step = "golden step"
+observe = "observe"
+diff = "diff"
+release = "release"
+
+[log.level]
+trace = "trace"
+debug = "debug"
+info = "info"
+warn = "warn"
+error = "error"
+
+[log.runner]
+build_start = "building test plan"
+compile_start = "compiling artifact via toolchain"
+prepare_start = "opening transport, scanning idcode"
+golden_reset = "resetting golden model"
+golden_load = "loading image into golden"
+load_start = "loading image into dut ({bytes} bytes)"
+run_start = "stimulus budget {budget}"
+golden_step = "stepping golden model"
+observe_dut = "reading dut state"
+observe_golden = "reading golden state"
+diff_result = "verdict={verdict}"
+release_done = "transport closed"
+
+[log.worker]
+dispatching = "dispatching {summary}"
+cancelled = "job cancelled by operator"

@@ -29,6 +29,51 @@ pub enum AppEvent {
     },
 }
 
+fn parse_dut_snapshot(v: &Value) -> Option<crate::app::DutSnapshot> {
+    use crate::app::{DutSnapshot, DutSnapshotSource};
+
+    let source = v["source"].as_str()?.parse::<DutSnapshotSource>().ok()?;
+    let ts = v["ts"].as_str().and_then(|s| {
+        chrono::DateTime::parse_from_rfc3339(s)
+            .ok()
+            .map(|dt| dt.with_timezone(&chrono::Utc))
+    })?;
+    let state = v.get("state")?;
+    let fields = state.get("fields").and_then(|f| f.as_object())?;
+    let job = v["job"].as_str().map(str::to_string);
+    let mut entries: Vec<(String, String)> = fields
+        .iter()
+        .map(|(name, repr)| (name.clone(), format_value_repr(repr)))
+        .collect();
+    entries.sort_by(|a, b| a.0.cmp(&b.0));
+    Some(DutSnapshot {
+        source,
+        ts,
+        job,
+        fields: entries,
+    })
+}
+
+/// Render a `ValueRepr` JSON object as a short display string. Keeps the
+/// TUI free of binary-blob dumps for `Bytes` and shows `U64`s in hex.
+fn format_value_repr(repr: &Value) -> String {
+    let ty = repr.get("type").and_then(|v| v.as_str()).unwrap_or("");
+    let val = repr.get("value");
+    match (ty, val) {
+        ("u64", Some(v)) => v
+            .as_u64()
+            .map(|n| format!("0x{n:x}"))
+            .unwrap_or_else(|| v.to_string()),
+        ("bool", Some(v)) => v.to_string(),
+        ("bytes", Some(Value::Array(bytes))) => bytes
+            .iter()
+            .filter_map(|b| b.as_u64())
+            .map(|b| format!("{b:02x}"))
+            .collect::<String>(),
+        _ => repr.to_string(),
+    }
+}
+
 /// Capped exponential backoff for WS reconnect attempts.
 /// Attempt 0 → 1s, 1 → 2s, 2 → 4s, ... clamped at 30s.
 pub fn backoff_delay(attempt: u32) -> Duration {
@@ -51,7 +96,54 @@ pub async fn handle_event(app: &mut App, client: &DaemonClient, event: AppEvent)
         AppEvent::DaemonEvent(v) => {
             // A WS message also implies the connection is healthy.
             app.mark_connected(client.base_url());
-            app.status = format!("event: {}", v["kind"].as_str().unwrap_or("?"));
+            let kind = v["kind"].as_str().unwrap_or("?");
+            app.status = format!("event: {kind}");
+            if kind == "dut-state-snapshot" {
+                if let Some(snap) = parse_dut_snapshot(&v) {
+                    let dut_id = v["dut"].as_str().unwrap_or("").to_string();
+                    if !dut_id.is_empty() {
+                        app.apply_dut_snapshot(dut_id, snap);
+                    }
+                } else {
+                    warn!(payload = %v, "dropping dut-state-snapshot frame missing fields");
+                }
+                return Ok(());
+            }
+            if kind == "job-log" {
+                if let (Some(job_id), Some(ts)) = (
+                    v["job"].as_str(),
+                    v["ts"].as_str().and_then(|s| {
+                        chrono::DateTime::parse_from_rfc3339(s)
+                            .ok()
+                            .map(|dt| dt.with_timezone(&chrono::Utc))
+                    }),
+                ) {
+                    let i18n_args = v["i18n_args"]
+                        .as_object()
+                        .map(|m| {
+                            m.iter()
+                                .map(|(k, val)| (k.clone(), val.as_str().unwrap_or("").to_string()))
+                                .collect()
+                        })
+                        .unwrap_or_default();
+                    app.push_job_log(
+                        job_id,
+                        crate::app::JobLogEntry {
+                            level: v["level"].as_str().unwrap_or("info").to_string(),
+                            message: v["message"].as_str().unwrap_or("").to_string(),
+                            stage: v["stage"].as_str().map(str::to_string),
+                            ts,
+                            i18n_key: v["i18n_key"].as_str().map(str::to_string),
+                            i18n_args,
+                        },
+                    );
+                } else {
+                    warn!(payload = %v, "dropping job-log frame missing job or ts");
+                }
+                // JobLog events don't shift jobs/campaigns/duts state, so
+                // skip the HTTP refresh. The log panel re-renders directly.
+                return Ok(());
+            }
             try_refresh(app, client).await;
         }
         AppEvent::Tick => {
@@ -106,6 +198,7 @@ fn handle_key(app: &mut App, k: KeyEvent) {
         KeyCode::Char('1') => app.switch_view(View::Jobs),
         KeyCode::Char('2') => app.switch_view(View::Campaigns),
         KeyCode::Char('3') => app.switch_view(View::Duts),
+        KeyCode::Char('4') => app.switch_view(View::About),
         KeyCode::Enter => {
             if let View::Jobs = &app.view
                 && let Some(job) = app.focused_job()
@@ -115,7 +208,7 @@ fn handle_key(app: &mut App, k: KeyEvent) {
             }
         }
         KeyCode::Esc => {
-            if let View::JobDetail { .. } = &app.view {
+            if matches!(&app.view, View::JobDetail { .. } | View::About) {
                 app.switch_view(View::Jobs);
             }
         }
@@ -134,6 +227,16 @@ async fn refresh_current_view(app: &mut App, client: &DaemonClient) -> Result<()
         View::Duts => {
             app.duts = client.list_duts().await?;
         }
+        View::About => {
+            // Fetch once per session: /about is a static snapshot
+            // of the daemon's compile-time cfg, so re-fetching on
+            // every tick would just waste a round trip.
+            if app.about.is_none() {
+                if let Ok(about) = client.about().await {
+                    app.about = Some(about);
+                }
+            }
+        }
         View::JobDetail { id } => {
             if let Some(job) = client.get_job(&id).await? {
                 // Update in-place if found, otherwise leave the existing list.
@@ -141,6 +244,15 @@ async fn refresh_current_view(app: &mut App, client: &DaemonClient) -> Result<()
                     *slot = job;
                 } else {
                     app.jobs.push(job);
+                }
+            }
+            // Seed the per-job log buffer with persisted history exactly
+            // once per session so the detail panel shows past events even
+            // for a job that started before the TUI connected. Subsequent
+            // ticks let the WS deliver live deltas without clobbering them.
+            if !app.is_backfilled(&id) {
+                if let Ok(history) = client.list_job_logs(&id).await {
+                    app.replace_job_logs(id, history);
                 }
             }
         }
@@ -333,6 +445,61 @@ mod tests {
             ),
             "got: {:?}",
             app.connection
+        );
+    }
+
+    #[tokio::test]
+    async fn job_log_event_appends_to_buffer_without_refreshing() {
+        let _g = locale_test_lock().await;
+        let client = DaemonClient::new("http://127.0.0.1:1".to_string());
+        let mut app = App::new();
+        app.mark_connected(client.base_url());
+
+        let v: Value = serde_json::from_str(
+            r#"{"ts":"2026-06-01T19:03:21.249Z","kind":"job-log","job":"00000000-0000-0000-0000-000000000007","level":"info","message":"opening jtag","stage":"prepare","i18n_key":"log.runner.prepare_start","i18n_args":{}}"#,
+        )
+        .unwrap();
+        handle_event(&mut app, &client, AppEvent::DaemonEvent(v))
+            .await
+            .unwrap();
+
+        let buf = app
+            .logs_for("00000000-0000-0000-0000-000000000007")
+            .expect("buffer present");
+        assert_eq!(buf.len(), 1);
+        let entry = buf.front().unwrap();
+        assert_eq!(entry.message, "opening jtag");
+        assert_eq!(entry.stage.as_deref(), Some("prepare"));
+        assert_eq!(
+            entry.i18n_key.as_deref(),
+            Some("log.runner.prepare_start"),
+            "wire-side i18n_key must round-trip into the buffer"
+        );
+        assert_eq!(entry.ts.to_rfc3339(), "2026-06-01T19:03:21.249+00:00");
+
+        // Connection state stays Connected because no HTTP refresh fired.
+        assert_eq!(app.connection, ConnectionState::Connected);
+    }
+
+    #[tokio::test]
+    async fn job_log_event_without_ts_is_dropped() {
+        let _g = locale_test_lock().await;
+        let client = DaemonClient::new("http://127.0.0.1:1".to_string());
+        let mut app = App::new();
+        app.mark_connected(client.base_url());
+
+        // No `ts` field: must NOT silently push a synthetic-timestamp entry.
+        let v: Value = serde_json::from_str(
+            r#"{"kind":"job-log","job":"00000000-0000-0000-0000-000000000008","level":"info","message":"no ts"}"#,
+        )
+        .unwrap();
+        handle_event(&mut app, &client, AppEvent::DaemonEvent(v))
+            .await
+            .unwrap();
+        assert!(
+            app.logs_for("00000000-0000-0000-0000-000000000008")
+                .is_none(),
+            "frame without ts should be dropped, not buffered with a fallback"
         );
     }
 

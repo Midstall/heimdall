@@ -51,6 +51,65 @@ pub struct DutCfg {
     /// Drives the renderer's input/output highlighting.
     #[serde(default, rename = "spice_watch")]
     pub spice_watches: Vec<SpiceWatchCfg>,
+    /// Per-DUT timeout profile. Unset fields fall back to the
+    /// silicon-friendly defaults inside [`DutTimeouts`]. Slow simulation
+    /// rigs (River HDL via remote_bitbang) should bump these.
+    #[serde(default)]
+    pub timeouts: DutTimeouts,
+    /// Declared ISA (XLEN + extensions) for this DUT. Optional: when
+    /// omitted, the driver attempts a JTAG `misa` probe and falls
+    /// back to RV32I if even that fails. Per-DUT config wins over a
+    /// successful probe so operators can downscope what the fuzzer is
+    /// allowed to emit (e.g. silicon supports F but isn't verified
+    /// yet).
+    #[serde(default)]
+    pub isa: Option<DutIsaCfg>,
+}
+
+/// Per-DUT ISA configuration block (TOML `[dut.isa]`). Either set a
+/// canonical ISA string (e.g. `string = "rv64imac_zicsr"`) and let
+/// the daemon parse it into `(xlen, extensions)`, or provide the
+/// pair directly via `xlen = 64` and `extensions = ["i", "m", ...]`.
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct DutIsaCfg {
+    pub xlen: u8,
+    /// Extension identifiers as canonical letters (`"i"`, `"m"`) or
+    /// Z-style names (`"zicsr"`, `"zifencei"`). Validated downstream
+    /// by `heimdall_fuzzer::parse_isa_string` semantics.
+    pub extensions: Vec<String>,
+}
+
+/// Per-DUT timeout knobs. All durations are in milliseconds except
+/// `lease_secs` which is in whole seconds (TOML readability). Sensible
+/// defaults are tuned for real silicon; ROHD/Dart sim DUTs need a profile
+/// like `{ openocd_startup_ms = 180000, openocd_rpc_ms = 120000,
+/// lease_secs = 600, wait_halt_max_ms = 180000 }`.
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(default, deny_unknown_fields)]
+pub struct DutTimeouts {
+    /// How long [`SpawnedOpenocdJtagTransport::open`] waits for OpenOCD's
+    /// Tcl port to become reachable after spawning.
+    pub openocd_startup_ms: u64,
+    /// How long [`OpenOcdJtagTransport::rpc`] waits for each command reply.
+    pub openocd_rpc_ms: u64,
+    /// DUT lease TTL. The daemon's worker thread acquires a lease for the
+    /// duration of one job; if the job runs longer than this without a
+    /// heartbeat, the lease releases and the job fails with `lease expired`.
+    pub lease_secs: u64,
+    /// Upper clamp on the RiverCpuDriver's `wait_halt` timeout per stimulus
+    /// budget. Below this the per-stimulus budget wins.
+    pub wait_halt_max_ms: u64,
+}
+
+impl Default for DutTimeouts {
+    fn default() -> Self {
+        Self {
+            openocd_startup_ms: 10_000,
+            openocd_rpc_ms: 5_000,
+            lease_secs: 60,
+            wait_halt_max_ms: 30_000,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]

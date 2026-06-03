@@ -12,6 +12,13 @@ keywords.workspace = true
 categories.workspace = true
 description = "Core types for Heimdall: IDs, verdicts, observations, stimuli, artifacts, and DUT kinds."
 
+[features]
+default = []
+# Enables `#[derive(ts_rs::TS)]` on wire types so downstream crates
+# can re-export TypeScript bindings into the web UI. Off by default
+# so the production build doesn't pull in the ts-rs derive crate.
+bindings = ["dep:ts-rs"]
+
 [dependencies]
 serde.workspace = true
 serde_json.workspace = true
@@ -20,3 +27,4 @@ uuid.workspace = true
 sha2.workspace = true
 hex.workspace = true
 thiserror.workspace = true
+ts-rs = { workspace = true, optional = true }

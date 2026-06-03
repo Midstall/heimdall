@@ -27,6 +27,11 @@ pub enum FailureKind {
         got: ValueRepr,
         expected: ValueRepr,
     },
+    /// Golden's `State` references a key the DUT's `State` doesn't carry.
+    /// Distinct from `DiffMismatch` so reports stop pretending the DUT
+    /// "returned Bool(false)" when the truth is the field never showed up.
+    #[error("field `{field}` missing on dut; expected {expected}")]
+    MissingField { field: String, expected: ValueRepr },
     #[error("dut unresponsive for at least {millis} ms")]
     DutUnresponsive { millis: u64 },
     #[error("timed out after {elapsed_ms} ms of {budget_ms} ms budget")]

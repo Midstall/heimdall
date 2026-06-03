@@ -19,7 +19,7 @@ impl Test for HelloTest {
     async fn build(&self, _ctx: &mut BuildCtx<'_>) -> Result<Plan, TestError> {
         Ok(Plan {
             input: Artifact::new(ArtifactKind::Asm, &b"li a0, 0x42"[..]),
-            expected: State::new().with("a0", ValueRepr::U64(0x42)),
+            expected: State::new().with("x10", ValueRepr::U64(0x42)),
             budget: StepBudget::cycles(1000),
             inputs: std::collections::BTreeMap::new(),
         })
@@ -30,7 +30,7 @@ impl Test for HelloTest {
 async fn mock_end_to_end_pass() {
     let runner = Runner::builder().build();
     let mut driver = MockDriver::new(DutKind::RiverRc1Nano)
-        .with_state(State::new().with("a0", ValueRepr::U64(0x42)));
+        .with_state(State::new().with("x10", ValueRepr::U64(0x42)));
     let mut golden = MockGoldenModel::new(DutKind::RiverRc1Nano);
     let mut dut = Dut::new(DutId::new("d1"), DutKind::RiverRc1Nano);
     let res = runner
@@ -44,7 +44,7 @@ async fn mock_end_to_end_pass() {
 async fn mock_end_to_end_fail_when_states_diverge() {
     let runner = Runner::builder().build();
     let mut driver = MockDriver::new(DutKind::RiverRc1Nano)
-        .with_state(State::new().with("a0", ValueRepr::U64(0xbad)));
+        .with_state(State::new().with("x10", ValueRepr::U64(0xbad)));
     let mut golden = MockGoldenModel::new(DutKind::RiverRc1Nano);
     let mut dut = Dut::new(DutId::new("d1"), DutKind::RiverRc1Nano);
     let res = runner

@@ -27,13 +27,22 @@ in
     };
 
     bind = lib.mkOption {
-      type = lib.types.str;
-      default = "127.0.0.1:7777";
-      example = "0.0.0.0:7777";
+      # Backwards-compat: existing string-form configs auto-wrap to a
+      # one-element list, so a `bind = "127.0.0.1:7777"` already in the
+      # wild keeps working unchanged.
+      type = lib.types.coercedTo lib.types.str (s: [ s ]) (lib.types.listOf lib.types.str);
+      default = [ "[::]:7777" ];
+      example = [
+        "127.0.0.1:7777"
+        "10.0.1.5:8080"
+      ];
       description = ''
-        Address and port the daemon binds to. The daemon has no auth by
-        design, so non-loopback binds should only be used on isolated lab
-        networks.
+        Addresses and ports the daemon binds to. Default `[::]:7777`
+        accepts both IPv4 and IPv6 traffic through the same dual-stack
+        socket on most platforms. The daemon has no auth by design, so
+        non-loopback binds should only be used on isolated lab
+        networks. Specify multiple entries to listen on more than one
+        explicit interface.
       '';
     };
 
@@ -85,6 +94,14 @@ in
         assertion = !(cfg.settings != null && cfg.configFile != null);
         message = "services.heimdall: set either `settings` or `configFile`, not both.";
       }
+      {
+        assertion = cfg.bind != [ ];
+        message = "services.heimdall.bind must contain at least one address.";
+      }
+      {
+        assertion = lib.all (b: lib.match ".*:[0-9]+" b != null) cfg.bind;
+        message = "services.heimdall.bind entries must each be of the form `host:port` or `[v6]:port`.";
+      }
     ];
 
     environment.systemPackages = [ cfg.package ];
@@ -93,7 +110,7 @@ in
       script = ''
         mkdir -p ${cfg.dataDir} ${cfg.dataDir}/objects
         exec ${lib.getExe cfg.package} daemon serve \
-          --bind ${cfg.bind} \
+          ${lib.concatMapStringsSep " \\\n          " (b: "--bind ${lib.escapeShellArg b}") cfg.bind} \
           --store-path ${cfg.dataDir}/heimdall.db \
           --blob-path ${cfg.dataDir}/objects \
           ${lib.optionalString (settingsFile != null) "--config ${settingsFile}"}

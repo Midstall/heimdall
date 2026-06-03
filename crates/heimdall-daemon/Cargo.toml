@@ -16,46 +16,64 @@ description = "HTTP/WebSocket daemon for Heimdall: job queue, blob store, campai
 default = ["sqlite"]
 sqlite = ["dep:sqlx"]
 ftdi = ["heimdall-transport/ftdi"]
+# Note: TypeScript binding generation moved to `heimdall-web/build.rs`
+# (which depends on `heimdall-api`, `heimdall-core`, and
+# `heimdall-disasm` with their respective bindings features). The
+# daemon no longer needs a `bindings` feature of its own.
 aegis = [
-    "heimdall-driver/aegis",
-    "heimdall-golden/aegis",
-    "heimdall-transport/bitbang-jtag",
-    "heimdall-transport/linux-cdev",
-    "heimdall-transport/openocd",
+  "heimdall-driver/aegis",
+  "heimdall-golden/aegis",
+  "heimdall-transport/bitbang-jtag",
+  "heimdall-transport/linux-cdev",
+  "heimdall-transport/openocd",
 ]
 river = [
-    "heimdall-driver/river",
-    "heimdall-golden/spike",
-    "heimdall-transport/openocd",
+  "heimdall-driver/river",
+  "heimdall-golden/spike",
+  "heimdall-transport/openocd",
 ]
+fuzzer = ["dep:heimdall-fuzzer"]
+# Enables the Cranelift-backed code generator inside `heimdall-fuzzer`.
+# Pure additive: the daemon still defaults to RawAsm; this only widens
+# the set of acceptable `GeneratorKind` values for the worker.
+cranelift = ["fuzzer", "heimdall-fuzzer/cranelift"]
 
 [dependencies]
 heimdall-config = { workspace = true }
 heimdall-core.workspace = true
+heimdall-api.workspace = true
 heimdall-i18n.workspace = true
 heimdall-driver.workspace = true
 heimdall-golden = { workspace = true, features = ["spice"] }
 heimdall-test.workspace = true
+heimdall-tools.workspace = true
+heimdall-disasm.workspace = true
+heimdall-web.workspace = true
 heimdall-transport.workspace = true
+heimdall-fuzzer = { workspace = true, optional = true }
 base64 = { workspace = true }
 
 async-trait.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
-tokio = { workspace = true, features = ["sync", "fs", "macros", "rt-multi-thread", "time", "net", "signal"] }
+tokio = { workspace = true, features = [
+  "sync",
+  "fs",
+  "macros",
+  "rt-multi-thread",
+  "time",
+  "net",
+  "signal",
+] }
+tokio-util = { workspace = true }
 serde.workspace = true
 serde_json.workspace = true
 chrono.workspace = true
 uuid = { workspace = true, features = ["v4", "serde"] }
 bytes.workspace = true
-sha2.workspace = true
-hex.workspace = true
 
 axum.workspace = true
 tower-http.workspace = true
-rust-embed = { workspace = true }
-mime_guess = { workspace = true }
-askama = { workspace = true }
 
 tar = { workspace = true }
 
@@ -68,3 +86,4 @@ tempfile.workspace = true
 reqwest.workspace = true
 base64 = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tokio-tungstenite.workspace = true

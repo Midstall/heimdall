@@ -9,9 +9,13 @@ use heimdall_daemon::dump as snapshot;
 
 #[derive(Debug, ClapArgs)]
 pub struct ServeArgs {
-    /// Address to bind. Non-loopback addresses emit a startup warning.
-    #[arg(long, default_value = "127.0.0.1:7777")]
-    pub bind: SocketAddr,
+    /// Address to bind. Pass `--bind` zero or more times: when omitted,
+    /// the daemon listens on `[::]:7777`, which on Linux accepts both
+    /// IPv4 and IPv6 traffic through the same dual-stack socket. When
+    /// one or more are given, only those are bound. Non-loopback
+    /// addresses emit a startup warning.
+    #[arg(long)]
+    pub bind: Vec<SocketAddr>,
 
     /// Path to the sqlite database file. Created if missing.
     #[arg(long, default_value = "heimdall.db")]
@@ -117,7 +121,10 @@ pub async fn restore(args: RestoreArgs) -> Result<()> {
 }
 
 pub async fn serve(args: ServeArgs, cfg_path: Option<PathBuf>) -> Result<()> {
-    heimdall_i18n::linfo!("log.daemon.starting", bind = args.bind);
+    let binds = resolve_binds(&args.bind);
+    for bind in &binds {
+        heimdall_i18n::linfo!("log.daemon.starting", bind = bind);
+    }
 
     let store = SqliteJobStore::open(&args.store_path)
         .await
@@ -134,12 +141,12 @@ pub async fn serve(args: ServeArgs, cfg_path: Option<PathBuf>) -> Result<()> {
             host = config.host.name,
             duts = config.duts.len(),
         );
-        heimdall::daemon::start_with_config(args.bind, Arc::new(store), Arc::new(blobs), &config)
+        heimdall::daemon::start_with_config_binds(binds, Arc::new(store), Arc::new(blobs), &config)
             .await
             .map_err(eyre::Report::from)?
     } else {
         heimdall_i18n::linfo!("log.daemon.no_config");
-        heimdall::daemon::start(args.bind, Arc::new(store), Arc::new(blobs))
+        heimdall::daemon::start_binds(binds, Arc::new(store), Arc::new(blobs))
             .await
             .map_err(eyre::Report::from)?
     };
@@ -147,6 +154,25 @@ pub async fn serve(args: ServeArgs, cfg_path: Option<PathBuf>) -> Result<()> {
     tokio::signal::ctrl_c().await.map_err(eyre::Report::from)?;
     heimdall_i18n::linfo!("log.daemon.shutting_down");
     handles.server_task.abort();
+    for task in &handles.extra_server_tasks {
+        task.abort();
+    }
     handles.worker_task.abort();
     Ok(())
+}
+
+/// Project the operator's `--bind` flags onto the actual listener set
+/// the runtime will spin up. An empty list (operator didn't supply
+/// `--bind` at all) maps to a single IPv6 wildcard listener
+/// (`[::]:7777`) which, with the Linux kernel's default
+/// `IPV6_V6ONLY=0`, accepts both IPv4 and IPv6 connections through
+/// the same socket. Binding 0.0.0.0:7777 alongside it would just
+/// collide with `EADDRINUSE`; operators who need explicit
+/// per-stack listeners can pass them via repeated `--bind`.
+fn resolve_binds(supplied: &[SocketAddr]) -> Vec<SocketAddr> {
+    if !supplied.is_empty() {
+        return supplied.to_vec();
+    }
+    use std::net::Ipv6Addr;
+    vec![SocketAddr::new(Ipv6Addr::UNSPECIFIED.into(), 7777)]
 }

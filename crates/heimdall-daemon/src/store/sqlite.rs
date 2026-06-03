@@ -1,9 +1,10 @@
 //! SQLite-backed JobStore. Behind the `sqlite` cargo feature.
 
 use async_trait::async_trait;
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use heimdall_core::{DutId, DutKind};
 use sqlx::Row;
+use sqlx::sqlite::SqliteRow;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use sqlx::{Pool, Sqlite};
 use std::path::Path;
@@ -12,8 +13,8 @@ use std::str::FromStr;
 use crate::error::{DaemonError, Result};
 use crate::store::JobStore;
 use crate::types::{
-    Campaign, CampaignId, CampaignState, CampaignTemplate, Event, EventId, Job, JobFilter, JobId,
-    JobKind, JobState, NewJob,
+    Campaign, CampaignId, CampaignState, CampaignTemplate, Event, EventId, EventRecord, Job,
+    JobFilter, JobId, JobKind, JobState, JobStateTag, NewJob,
 };
 
 static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("./migrations");
@@ -66,6 +67,123 @@ fn dut_kind_str(k: &DutKind) -> String {
 fn dut_kind_from_str(s: &str) -> Result<DutKind> {
     serde_json::from_str(&format!("\"{}\"", s))
         .map_err(|e| DaemonError::Config(format!("dut_kind `{s}`: {e}")))
+}
+
+fn event_record_from_row(row: &SqliteRow) -> Result<EventRecord> {
+    let id: i64 = row.try_get("id").map_err(DaemonError::Sqlx)?;
+    let created_at: String = row.try_get("created_at").map_err(DaemonError::Sqlx)?;
+    let payload: String = row.try_get("payload_json").map_err(DaemonError::Sqlx)?;
+    let ts = chrono::DateTime::parse_from_rfc3339(&created_at)
+        .map_err(|e| DaemonError::Config(format!("event.created_at: {e}")))?
+        .with_timezone(&Utc);
+    let event: Event = serde_json::from_str(&payload)?;
+    Ok(EventRecord {
+        id: EventId(id as u64),
+        ts,
+        event,
+    })
+}
+
+/// Render the WHERE clause + ordered bind list shared by list_jobs,
+/// count_jobs, and the prune surface. Centralizing this means a
+/// future filter dimension (e.g. campaign id) lights up every
+/// caller in one diff.
+fn jobs_where_clause(filter: &JobFilter) -> Result<(String, Vec<String>)> {
+    let mut sql = String::from(" WHERE 1=1");
+    let mut binds: Vec<String> = Vec::new();
+    if let Some(dut) = filter.dut.as_ref() {
+        sql.push_str(" AND dut = ?");
+        binds.push(dut.0.clone());
+    }
+    if let Some(tags) = &filter.state_in {
+        if !tags.is_empty() {
+            sql.push_str(" AND state_tag IN (");
+            for (i, _) in tags.iter().enumerate() {
+                if i > 0 {
+                    sql.push(',');
+                }
+                sql.push('?');
+            }
+            sql.push(')');
+            for tag in tags {
+                let s = serde_json::to_string(tag)?.trim_matches('"').to_string();
+                binds.push(s);
+            }
+        }
+    }
+    if let Some(before) = filter.created_before.as_ref() {
+        sql.push_str(" AND created_at < ?");
+        binds.push(before.to_rfc3339());
+    }
+    Ok((sql, binds))
+}
+
+/// Tags the bulk-prune surface accepts. Anything in flight is
+/// silently dropped so a stray operator filter can't drop a job out
+/// from under a running worker. If the caller supplied no
+/// state_in, default to "every terminal state" so a naked
+/// `created_before = X` still does the right thing.
+fn restrict_to_terminal(supplied: Option<Vec<JobStateTag>>) -> Vec<JobStateTag> {
+    let terminal = [
+        JobStateTag::Done,
+        JobStateTag::Failed,
+        JobStateTag::Cancelled,
+        JobStateTag::Dead,
+    ];
+    match supplied {
+        Some(tags) => tags.into_iter().filter(|t| terminal.contains(t)).collect(),
+        None => terminal.to_vec(),
+    }
+}
+
+fn is_terminal(state: &JobState) -> bool {
+    matches!(
+        state.tag(),
+        JobStateTag::Done | JobStateTag::Failed | JobStateTag::Cancelled | JobStateTag::Dead,
+    )
+}
+
+/// Cascade-delete every row that references `job`. The schema has
+/// foreign-key-like relationships (job_logs, events, job_programs)
+/// but no actual ON DELETE CASCADE today, so we issue the deletes
+/// here. Wraps the per-job sequence the prune transaction calls.
+async fn delete_job_rows(pool: &sqlx::SqlitePool, job: JobId) -> Result<()> {
+    let mut tx = pool.begin().await?;
+    delete_job_rows_tx(&mut tx, job).await?;
+    tx.commit().await?;
+    Ok(())
+}
+
+async fn delete_job_rows_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    job: JobId,
+) -> Result<()> {
+    let id_str = job.0.to_string();
+    // job_programs: per-job blob mapping written by the fuzz worker.
+    // We do NOT delete the underlying blob from the BlobStore here
+    // (this trait doesn't own one); the caller can wire blob
+    // collection separately if disk space matters. For sqlite
+    // alone the row drop is enough to break the disasm route's
+    // fallback lookup.
+    sqlx::query("DELETE FROM job_programs WHERE job_id = ?")
+        .bind(&id_str)
+        .execute(&mut **tx)
+        .await?;
+    // The events table stores its job id inside the JSON payload,
+    // not as a separate column; LIKE-match on the well-known
+    // `"job":"<uuid>"` shape is the cheapest scoped delete without
+    // a denormalised job_id column. Catches JobLog + JobCreated +
+    // JobStateChanged + DutStateSnapshot variants.
+    let needle = format!("%\"job\":\"{id_str}\"%");
+    sqlx::query("DELETE FROM events WHERE payload_json LIKE ?")
+        .bind(&needle)
+        .execute(&mut **tx)
+        .await?;
+    sqlx::query("DELETE FROM jobs WHERE id = ?")
+        .bind(&id_str)
+        .execute(&mut **tx)
+        .await?;
+    Ok(())
 }
 
 fn row_to_job(row: &sqlx::sqlite::SqliteRow) -> Result<Job> {
@@ -145,11 +263,7 @@ fn row_to_campaign(row: &sqlx::sqlite::SqliteRow) -> Result<Campaign> {
 
 #[async_trait]
 impl JobStore for SqliteJobStore {
-    async fn create_job(&self, new: NewJob) -> Result<Job> {
-        // `dut_kind` isn't on `NewJob` yet. Encode a placeholder; the HTTP
-        // layer overrides it once the DUT registry has resolved the kind.
-        let dut_kind = DutKind::RiverRc1Nano;
-
+    async fn create_job(&self, new: NewJob, dut_kind: DutKind) -> Result<Job> {
         let now = Utc::now();
         let job = Job {
             id: JobId::new(),
@@ -193,38 +307,67 @@ impl JobStore for SqliteJobStore {
     }
 
     async fn list_jobs(&self, filter: JobFilter) -> Result<Vec<Job>> {
-        let mut sql = String::from("SELECT * FROM jobs WHERE 1=1");
-        if filter.dut.is_some() {
-            sql.push_str(" AND dut = ?");
-        }
-        if let Some(tags) = &filter.state_in {
-            if !tags.is_empty() {
-                sql.push_str(" AND state_tag IN (");
-                for (i, _) in tags.iter().enumerate() {
-                    if i > 0 {
-                        sql.push(',');
-                    }
-                    sql.push('?');
-                }
-                sql.push(')');
-            }
-        }
-        sql.push_str(" ORDER BY created_at DESC");
+        let (where_sql, binds) = jobs_where_clause(&filter)?;
+        let mut sql = format!("SELECT * FROM jobs{where_sql} ORDER BY created_at DESC");
         if let Some(limit) = filter.limit {
             sql.push_str(&format!(" LIMIT {limit}"));
+            if let Some(offset) = filter.offset {
+                sql.push_str(&format!(" OFFSET {offset}"));
+            }
         }
         let mut q = sqlx::query(&sql);
-        if let Some(dut) = filter.dut.as_ref() {
-            q = q.bind(&dut.0);
-        }
-        if let Some(tags) = filter.state_in.as_ref() {
-            for tag in tags {
-                let s = serde_json::to_string(tag)?.trim_matches('"').to_string();
-                q = q.bind(s);
-            }
+        for b in &binds {
+            q = q.bind(b);
         }
         let rows = q.fetch_all(&self.pool).await?;
         rows.iter().map(row_to_job).collect()
+    }
+
+    async fn count_jobs(&self, filter: JobFilter) -> Result<u64> {
+        let (where_sql, binds) = jobs_where_clause(&filter)?;
+        let sql = format!("SELECT COUNT(*) AS n FROM jobs{where_sql}");
+        let mut q = sqlx::query(&sql);
+        for b in &binds {
+            q = q.bind(b);
+        }
+        let row = q.fetch_one(&self.pool).await?;
+        let n: i64 = sqlx::Row::try_get(&row, "n")?;
+        Ok(n.max(0) as u64)
+    }
+
+    async fn delete_job(&self, id: JobId) -> Result<bool> {
+        // Resolve job first so we can reject non-terminal deletes
+        // with a clear signal back to the route handler (which maps
+        // it to a 400). Terminal states: Done / Failed / Cancelled /
+        // Dead. Anything else is in flight and refused.
+        let Some(existing) = self.get_job(id).await? else {
+            return Ok(false);
+        };
+        if !is_terminal(&existing.state) {
+            return Err(crate::error::DaemonError::Config(format!(
+                "refusing to delete non-terminal job {id} in state {:?}",
+                existing.state.tag()
+            )));
+        }
+        delete_job_rows(&self.pool, id).await?;
+        Ok(true)
+    }
+
+    async fn delete_jobs(&self, filter: JobFilter) -> Result<u64> {
+        // Bulk delete: only terminal jobs. We force-restrict the
+        // filter to terminal state_tags so a caller can't drop
+        // Queued/Running rows even by mistake.
+        let restricted_filter = JobFilter {
+            state_in: Some(restrict_to_terminal(filter.state_in.clone())),
+            ..filter
+        };
+        let victims = self.list_jobs(restricted_filter).await?;
+        let mut tx = self.pool.begin().await?;
+        for job in &victims {
+            delete_job_rows_tx(&mut tx, job.id).await?;
+        }
+        tx.commit().await?;
+        Ok(victims.len() as u64)
     }
 
     async fn update_state(&self, id: JobId, state: JobState) -> Result<()> {
@@ -251,8 +394,7 @@ impl JobStore for SqliteJobStore {
         Ok(())
     }
 
-    async fn append_event(&self, ev: Event) -> Result<EventId> {
-        let now = Utc::now();
+    async fn append_event_at(&self, ev: Event, ts: DateTime<Utc>) -> Result<EventId> {
         let row = sqlx::query(
             r#"
             INSERT INTO events (payload_json, created_at)
@@ -261,17 +403,17 @@ impl JobStore for SqliteJobStore {
             "#,
         )
         .bind(serde_json::to_string(&ev)?)
-        .bind(now.to_rfc3339())
+        .bind(ts.to_rfc3339())
         .fetch_one(&self.pool)
         .await?;
         let id: i64 = row.try_get("id").map_err(DaemonError::Sqlx)?;
         Ok(EventId(id as u64))
     }
 
-    async fn list_events_since(&self, since: EventId, limit: u32) -> Result<Vec<(EventId, Event)>> {
+    async fn list_events_since(&self, since: EventId, limit: u32) -> Result<Vec<EventRecord>> {
         let rows = sqlx::query(
             r#"
-            SELECT id, payload_json
+            SELECT id, created_at, payload_json
             FROM events
             WHERE id > ?1
             ORDER BY id ASC
@@ -284,10 +426,36 @@ impl JobStore for SqliteJobStore {
         .await?;
         let mut out = Vec::with_capacity(rows.len());
         for r in rows {
-            let id: i64 = r.try_get("id").map_err(DaemonError::Sqlx)?;
-            let payload: String = r.try_get("payload_json").map_err(DaemonError::Sqlx)?;
-            let ev: Event = serde_json::from_str(&payload)?;
-            out.push((EventId(id as u64), ev));
+            out.push(event_record_from_row(&r)?);
+        }
+        Ok(out)
+    }
+
+    async fn list_job_logs(
+        &self,
+        job: JobId,
+        since: EventId,
+        limit: u32,
+    ) -> Result<Vec<EventRecord>> {
+        let rows = sqlx::query(
+            r#"
+            SELECT id, created_at, payload_json
+            FROM events
+            WHERE id > ?1
+              AND json_extract(payload_json, '$.kind') = 'job-log'
+              AND json_extract(payload_json, '$.job') = ?2
+            ORDER BY id ASC
+            LIMIT ?3
+            "#,
+        )
+        .bind(since.0 as i64)
+        .bind(job.0.to_string())
+        .bind(limit as i64)
+        .fetch_all(&self.pool)
+        .await?;
+        let mut out = Vec::with_capacity(rows.len());
+        for r in rows {
+            out.push(event_record_from_row(&r)?);
         }
         Ok(out)
     }
@@ -401,8 +569,7 @@ impl JobStore for SqliteJobStore {
         Ok(())
     }
 
-    async fn import_event(&self, id: EventId, ev: Event) -> Result<()> {
-        let now = Utc::now();
+    async fn import_event(&self, id: EventId, ts: DateTime<Utc>, ev: Event) -> Result<()> {
         sqlx::query(
             r#"
             INSERT INTO events (id, payload_json, created_at)
@@ -411,11 +578,60 @@ impl JobStore for SqliteJobStore {
         )
         .bind(id.0 as i64)
         .bind(serde_json::to_string(&ev)?)
-        .bind(now.to_rfc3339())
+        .bind(ts.to_rfc3339())
         .execute(&self.pool)
         .await?;
         // SQLite AUTOINCREMENT respects the highest inserted id, so future
         // append_event calls will get id > max(imported_id) automatically.
         Ok(())
+    }
+
+    async fn set_job_program(
+        &self,
+        job: JobId,
+        program: crate::store::JobProgramRef,
+    ) -> Result<()> {
+        let kind_json = serde_json::to_string(&program.kind)?;
+        sqlx::query(
+            r#"
+            INSERT INTO job_programs (job_id, blob_id, kind, iter, recorded_at)
+            VALUES (?1, ?2, ?3, ?4, ?5)
+            ON CONFLICT(job_id) DO UPDATE SET
+                blob_id     = excluded.blob_id,
+                kind        = excluded.kind,
+                iter        = excluded.iter,
+                recorded_at = excluded.recorded_at
+            "#,
+        )
+        .bind(job.0.to_string())
+        .bind(&program.blob_id.0)
+        .bind(kind_json)
+        .bind(program.iter.map(|i| i as i64))
+        .bind(Utc::now().to_rfc3339())
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn get_job_program(&self, job: JobId) -> Result<Option<crate::store::JobProgramRef>> {
+        let row = sqlx::query_as::<_, (String, String, Option<i64>)>(
+            r#"
+            SELECT blob_id, kind, iter
+            FROM job_programs
+            WHERE job_id = ?1
+            "#,
+        )
+        .bind(job.0.to_string())
+        .fetch_optional(&self.pool)
+        .await?;
+        let Some((blob_id, kind_json, iter)) = row else {
+            return Ok(None);
+        };
+        let kind: heimdall_core::ArtifactKind = serde_json::from_str(&kind_json)?;
+        Ok(Some(crate::store::JobProgramRef {
+            blob_id: crate::types::BlobId(blob_id),
+            kind,
+            iter: iter.map(|i| i as u64),
+        }))
     }
 }

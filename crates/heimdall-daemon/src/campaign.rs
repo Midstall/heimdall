@@ -68,7 +68,7 @@ pub async fn submit_campaign(
     }
 
     for new in new_jobs {
-        queue.submit(new).await?;
+        queue.submit(new, dut_kind).await?;
     }
 
     // Move to Running once we've actually submitted jobs.
@@ -125,7 +125,11 @@ pub fn compute_state(jobs: &[Job]) -> CampaignState {
                     }
                 }
             }
-            JobStateTag::Failed => {
+            JobStateTag::Failed | JobStateTag::Dead => {
+                // Dead == "daemon crashed mid-run." Rolls up the same
+                // as Failed: the campaign couldn't complete cleanly,
+                // operator must re-submit. Don't conflate with the
+                // operator-driven Cancelled path.
                 any_fail = true;
                 all_cancelled = false;
             }

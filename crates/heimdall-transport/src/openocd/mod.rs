@@ -20,6 +20,7 @@ pub struct OpenOcdJtagTransport {
     endpoint: SocketAddr,
     sock: Option<TcpStream>,
     tap_name: String,
+    rpc_timeout: Duration,
 }
 
 /// Default tap name used by `JtagOps::shift_dr` when the caller doesn't
@@ -27,12 +28,17 @@ pub struct OpenOcdJtagTransport {
 /// OpenOCD configs in the repo.
 pub const DEFAULT_TAP_NAME: &str = "riscv.cpu";
 
+/// Default RPC reply timeout. Slow simulation rigs (River HDL over
+/// remote_bitbang) should bump via [`OpenOcdJtagTransport::with_rpc_timeout`].
+pub const DEFAULT_RPC_TIMEOUT: Duration = Duration::from_secs(5);
+
 impl OpenOcdJtagTransport {
     pub fn new(endpoint: SocketAddr) -> Self {
         Self {
             endpoint,
             sock: None,
             tap_name: DEFAULT_TAP_NAME.to_string(),
+            rpc_timeout: DEFAULT_RPC_TIMEOUT,
         }
     }
 
@@ -43,8 +49,19 @@ impl OpenOcdJtagTransport {
         self
     }
 
+    /// Set how long [`Self::rpc`] waits for each command's reply. Overrides
+    /// [`DEFAULT_RPC_TIMEOUT`]. The slow ROHD sim sets this to >=120s.
+    pub fn with_rpc_timeout(mut self, d: Duration) -> Self {
+        self.rpc_timeout = d;
+        self
+    }
+
     pub fn tap_name(&self) -> &str {
         &self.tap_name
+    }
+
+    pub fn rpc_timeout(&self) -> Duration {
+        self.rpc_timeout
     }
 
     pub async fn rpc(&mut self, cmd: &str) -> Result<String> {
@@ -71,9 +88,12 @@ impl OpenOcdJtagTransport {
                 }
             }
         };
-        match timeout(Duration::from_secs(5), read).await {
+        let budget = self.rpc_timeout;
+        match timeout(budget, read).await {
             Ok(r) => r,
-            Err(_) => Err(TransportError::Timeout { millis: 5000 }),
+            Err(_) => Err(TransportError::Timeout {
+                millis: budget.as_millis() as u64,
+            }),
         }
     }
 }

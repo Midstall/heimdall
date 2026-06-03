@@ -35,6 +35,8 @@ async fn start_with_two_duts() -> (heimdall_daemon::DaemonHandles, TempDir) {
                 bringup: None,
                 netlist: None,
                 spice_watches: vec![],
+                timeouts: Default::default(),
+                isa: None,
             },
             DutCfg {
                 id: "luna1-2".into(),
@@ -45,6 +47,8 @@ async fn start_with_two_duts() -> (heimdall_daemon::DaemonHandles, TempDir) {
                 bringup: None,
                 netlist: None,
                 spice_watches: vec![],
+                timeouts: Default::default(),
+                isa: None,
             },
         ],
         transport: TransportSection {

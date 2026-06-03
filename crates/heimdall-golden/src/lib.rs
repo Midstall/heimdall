@@ -21,7 +21,10 @@ pub use aegis::AegisGoldenModel;
 pub mod spice;
 
 #[cfg(feature = "spice")]
-pub use spice::{RawTrace, SpiceCoverage, SpiceDir, SpiceGoldenModel, SpiceWatch, parse_raw_ascii};
+pub use spice::{
+    RawTrace, SpiceCoverage, SpiceDir, SpiceGoldenModel, SpiceRawParseError, SpiceWatch,
+    parse_raw_ascii,
+};
 
 #[cfg(feature = "spice")]
 pub use spice::render::{

@@ -47,7 +47,9 @@ pub struct MockGoldenModel {
 
 impl MockGoldenModel {
     pub fn new(target: DutKind) -> Self {
-        let fixed_state = State::new().with("a0", ValueRepr::U64(0x42));
+        // Heimdall convention: State uses hardware register names (x10) not
+        // ABI names (a0). Frontends translate to ABI on render.
+        let fixed_state = State::new().with("x10", ValueRepr::U64(0x42));
         Self {
             target,
             fixed_state,

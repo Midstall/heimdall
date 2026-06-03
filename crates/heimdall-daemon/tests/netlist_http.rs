@@ -53,6 +53,8 @@ async fn start_with_netlist(
                         direction: PadDirection::Out,
                     },
                 ],
+                timeouts: Default::default(),
+                isa: None,
             },
             DutCfg {
                 id: "spice-none".into(),
@@ -63,6 +65,8 @@ async fn start_with_netlist(
                 bringup: None,
                 netlist: None,
                 spice_watches: vec![],
+                timeouts: Default::default(),
+                isa: None,
             },
         ],
         transport: TransportSection {
@@ -183,6 +187,8 @@ async fn missing_netlist_file_rejected_at_startup() {
             bringup: None,
             netlist: Some(std::path::PathBuf::from("/nonexistent.sp")),
             spice_watches: vec![],
+            timeouts: Default::default(),
+            isa: None,
         }],
         transport: TransportSection {
             jtag: vec![JtagTransportCfg {

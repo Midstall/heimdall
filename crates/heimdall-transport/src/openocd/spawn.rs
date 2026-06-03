@@ -27,6 +27,7 @@ pub struct SpawnedOpenocdJtagTransport {
     tap_name: String,
     /// Maximum wait for the Tcl port to come up.
     pub startup_timeout: Duration,
+    rpc_timeout: Duration,
     inner: Option<Inner>,
 }
 
@@ -44,8 +45,15 @@ impl SpawnedOpenocdJtagTransport {
             extra_args: Vec::new(),
             tap_name: crate::openocd::DEFAULT_TAP_NAME.to_string(),
             startup_timeout: Duration::from_secs(10),
+            rpc_timeout: crate::openocd::DEFAULT_RPC_TIMEOUT,
             inner: None,
         }
+    }
+
+    /// Forward an RPC read timeout to the inner [`OpenOcdJtagTransport`].
+    pub fn with_rpc_timeout(mut self, d: Duration) -> Self {
+        self.rpc_timeout = d;
+        self
     }
 
     pub fn with_extra_args(mut self, args: impl IntoIterator<Item = String>) -> Self {
@@ -81,13 +89,15 @@ impl SpawnedOpenocdJtagTransport {
         self.inner_mut()?.rpc(cmd).await
     }
 
-    /// Poll the Tcl port until a TCP connection succeeds or the deadline
-    /// elapses. Useful as the readiness check after spawning OpenOCD.
-    async fn wait_for_port(addr: std::net::SocketAddr, deadline: Instant) -> Result<()> {
+    /// Poll the Tcl port until a TCP connection succeeds or the budget
+    /// elapses. Reports the configured `budget` (not the post-deadline drift)
+    /// so the user sees the real timeout value on failure.
+    async fn wait_for_port(addr: std::net::SocketAddr, budget: Duration) -> Result<()> {
+        let deadline = Instant::now() + budget;
         loop {
             if Instant::now() >= deadline {
                 return Err(TransportError::Timeout {
-                    millis: deadline.elapsed().as_millis() as u64,
+                    millis: budget.as_millis() as u64,
                 });
             }
             match TcpStream::connect(addr).await {
@@ -133,15 +143,16 @@ impl Transport for SpawnedOpenocdJtagTransport {
         );
         let child = cmd.spawn().map_err(TransportError::Io)?;
 
-        // Poll the port.
         let endpoint: std::net::SocketAddr = format!("127.0.0.1:{}", self.tcl_port)
             .parse()
             .expect("valid socket addr");
-        let deadline = Instant::now() + self.startup_timeout;
-        let wait = Self::wait_for_port(endpoint, deadline);
-        if let Err(e) = timeout(self.startup_timeout, wait)
-            .await
-            .unwrap_or(Err(TransportError::Timeout { millis: 0 }))
+        let wait = Self::wait_for_port(endpoint, self.startup_timeout);
+        if let Err(e) =
+            timeout(self.startup_timeout, wait)
+                .await
+                .unwrap_or(Err(TransportError::Timeout {
+                    millis: self.startup_timeout.as_millis() as u64,
+                }))
         {
             // Tear down the orphan subprocess on timeout.
             let mut child = child;
@@ -150,8 +161,9 @@ impl Transport for SpawnedOpenocdJtagTransport {
             return Err(e);
         }
 
-        let mut transport =
-            OpenOcdJtagTransport::new(endpoint).with_tap_name(self.tap_name.clone());
+        let mut transport = OpenOcdJtagTransport::new(endpoint)
+            .with_tap_name(self.tap_name.clone())
+            .with_rpc_timeout(self.rpc_timeout);
         transport.open().await?;
 
         self.inner = Some(Inner { child, transport });
@@ -211,9 +223,13 @@ mod tests {
         .with_extra_args(["30".into()])
         .with_startup_timeout(Duration::from_millis(300));
         let err = t.open().await.expect_err("expected timeout");
-        assert!(matches!(err, TransportError::Timeout { .. }), "got {err:?}");
+        match &err {
+            TransportError::Timeout { millis } => {
+                assert!(*millis >= 200, "expected configured budget, got {millis}ms");
+            }
+            other => panic!("expected Timeout, got {other:?}"),
+        }
 
-        // Tear down the orphan child if one is still attached.
         let _ = t.close().await;
     }
 

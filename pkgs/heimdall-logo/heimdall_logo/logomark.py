@@ -36,22 +36,22 @@ class Logomark:
         # Helmet H proportions (fractions of `size`).
         helmet_width: float = 0.46,
         helmet_height: float = 0.52,
-        bar_thickness: float = 0.08,   # stroke width as a fraction of size
-        visor_drop: float = 0.08,      # how far the V-notch descends from the crossbar
+        bar_thickness: float = 0.08,  # stroke width as a fraction of size
+        visor_drop: float = 0.08,  # how far the V-notch descends from the crossbar
         # Sword.
-        sword_length: float = 0.86,    # total height of the sword (fraction of size)
+        sword_length: float = 0.86,  # total height of the sword (fraction of size)
         sword_thickness: float = 0.05,
         # Wings: horizontal feathers fanning slightly upward, mirrored per side.
         wing_count: int = 5,
-        wing_inner_x: float = 0.26,    # x distance from center at the inner (helmet-facing) end
-        wing_outer_x: float = 0.50,    # x distance from center at the outer (tip) end
-        wing_top_y: float = 0.20,      # y distance above center where the topmost feather sits
-        wing_bottom_y: float = 0.04,   # y distance above center where the bottommost feather sits
-        wing_tilt: float = 0.06,       # how much each feather rises from inner to outer
+        wing_inner_x: float = 0.26,  # x distance from center at the inner (helmet-facing) end
+        wing_outer_x: float = 0.50,  # x distance from center at the outer (tip) end
+        wing_top_y: float = 0.20,  # y distance above center where the topmost feather sits
+        wing_bottom_y: float = 0.04,  # y distance above center where the bottommost feather sits
+        wing_tilt: float = 0.06,  # how much each feather rises from inner to outer
         # Halo arc.
         halo_radius: float = 0.46,
         halo_thickness: float = 0.015,
-        halo_arc_degrees: float = 220, # how much of the circle is drawn
+        halo_arc_degrees: float = 220,  # how much of the circle is drawn
         # Circuit traces.
         trace_count: int = 2,
         trace_length: float = 0.18,
@@ -260,7 +260,9 @@ class Logomark:
         self._draw_helmet(doc, parent)
         self._draw_sword(doc, parent)
 
-    def render(self, background: str | None = None, margin: float = 12.0) -> SvgDocument:
+    def render(
+        self, background: str | None = None, margin: float = 12.0
+    ) -> SvgDocument:
         """Render the logomark as a standalone SVG document."""
         from heimdall_logo.colors import HeimdallPalette
 

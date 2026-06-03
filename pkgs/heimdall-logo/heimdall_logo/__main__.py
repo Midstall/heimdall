@@ -1,8 +1,8 @@
 """CLI entry point. Used by the nix derivation to produce SVG artifacts:
 
-    heimdall-logo logomark --output logomark.svg
-    heimdall-logo favicon  --output favicon.svg
-    heimdall-logo full     --output logo.svg --background "#1a1b26"
+heimdall-logo logomark --output logomark.svg
+heimdall-logo favicon  --output favicon.svg
+heimdall-logo full     --output logo.svg --background "#1a1b26"
 """
 
 import argparse
@@ -56,7 +56,9 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     p_mark = sub.add_parser("logomark", help="Render the symbol only.")
-    p_mark.add_argument("--output", "-o", default="-", help="Output path or `-` for stdout.")
+    p_mark.add_argument(
+        "--output", "-o", default="-", help="Output path or `-` for stdout."
+    )
     p_mark.add_argument("--background", default=None, help="Optional background color.")
     p_mark.add_argument("--margin", type=float, default=12.0)
     p_mark.set_defaults(func=_cmd_logomark)

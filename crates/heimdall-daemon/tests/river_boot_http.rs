@@ -23,16 +23,22 @@ async fn boot_river_elf_dispatches_through_factory() {
     // Mock OpenOCD with enough responses to get through prepare + load + run.
     // Reg reads return parseable hex. load_image matches via prefix.
     let mut srv = MockOpenOcdServer::new()
-        .respond("reset init", "")
+        .respond("riscv dmi_write 0x10 0x0", "")
+        .respond("riscv dmi_write 0x10 0x1", "")
+        .respond("riscv dmi_read 0x10", "0x00000001")
         .respond("scan_chain", "  1   river.cpu    Y    0xdeadbeef")
         .respond("halt", "")
         .respond("resume", "")
         .respond("load_image", "loaded 4 bytes in 0.001s (4 KiB/s)")
         .respond("reg pc", "pc (/64): 0x80000010");
-    for i in 1..32u32 {
+    for name in [
+        "zero", "ra", "sp", "gp", "tp", "t0", "t1", "t2", "fp", "s1", "a0", "a1", "a2", "a3", "a4",
+        "a5", "a6", "a7", "s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9", "s10", "s11", "t3", "t4",
+        "t5", "t6",
+    ] {
         srv = srv.respond(
-            format!("reg x{i}"),
-            format!("x{i} (/64): 0x0000000000000000"),
+            format!("reg {name}"),
+            format!("{name} (/64): 0x0000000000000000"),
         );
     }
     srv = srv.respond("wait_halt 1000", "");
@@ -60,6 +66,8 @@ async fn boot_river_elf_dispatches_through_factory() {
             bringup: None,
             netlist: None,
             spice_watches: vec![],
+            timeouts: Default::default(),
+            isa: None,
         }],
         transport: TransportSection {
             jtag: vec![JtagTransportCfg {
@@ -140,11 +148,14 @@ async fn boot_river_elf_dispatches_through_factory() {
         "expected terminal done|failed; got `{last_state}`"
     );
 
-    // Sanity: the mock should have received at least the prepare-phase commands.
     let received = server.received().await;
     assert!(
-        received.iter().any(|c| c == "reset init"),
-        "expected mock to see `reset init`; got {received:?}"
+        received.iter().any(|c| c == "riscv dmi_write 0x10 0x0"),
+        "expected mock to see dmactive=0 write; got {received:?}"
+    );
+    assert!(
+        received.iter().any(|c| c == "riscv dmi_write 0x10 0x1"),
+        "expected mock to see dmactive=1 write; got {received:?}"
     );
 
     handles.server_task.abort();

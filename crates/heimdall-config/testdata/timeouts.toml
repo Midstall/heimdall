@@ -1,0 +1,20 @@
+[host]
+name = "rig-sim"
+bind = "127.0.0.1:7777"
+
+[[dut]]
+id = "river-sim-1"
+kind = "river-rc1-nano"
+transports = ["jtag.openocd-1"]
+
+[dut.timeouts]
+openocd_startup_ms = 180000
+openocd_rpc_ms = 120000
+lease_secs = 600
+wait_halt_max_ms = 180000
+
+[[transport.jtag]]
+id = "jtag.openocd-1"
+driver = "openocd"
+openocd_endpoint = "127.0.0.1:6666"
+freq_hz = 1000000

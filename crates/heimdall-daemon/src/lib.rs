@@ -5,12 +5,17 @@
 //! through `heimdall_test::Runner`.
 
 pub mod campaign;
+pub mod cancellations;
 pub mod dump;
 pub mod dut_registry;
+pub mod dut_state;
 pub mod error;
 pub mod event_bus;
 pub mod factory;
+pub mod isa_probes;
+pub mod job_logger;
 pub mod lease;
+pub mod loaded_programs;
 pub mod queue;
 pub mod routes;
 pub mod runtime;
@@ -21,10 +26,13 @@ pub mod types;
 pub mod worker;
 
 pub use campaign::{compute_state, refresh_state, submit_campaign};
+pub use cancellations::CancellationRegistry;
 pub use dut_registry::{
-    BringupPayload, ConnectionStatus, DutRecord, DutRegistry, GoldenSpec, GpioSpec, IoPinmap,
-    PadDirection, PadEntry, TransportSpec, build_registry, build_registry_with_root,
+    BringupPayload, ConnectionStatus, DutRecord, DutRegistry, DutTimeouts, GoldenSpec, GpioSpec,
+    IoPinmap, IsaSpec, PadDirection, PadEntry, TransportSpec, build_registry,
+    build_registry_with_root,
 };
+pub use dut_state::{DutStateCache, DutStateLatest};
 pub use error::{DaemonError, Result};
 pub use event_bus::EventBus;
 #[cfg(feature = "aegis")]
@@ -32,16 +40,23 @@ pub use factory::{AegisLoadMockFactory, AegisRealFactory, AegisVectorTest};
 #[cfg(feature = "river")]
 pub use factory::{BootRiverElfTest, RiverRealFactory};
 pub use factory::{DispatchBundle, DriverFactory, DriverRegistry, MockHelloFactory};
+pub use isa_probes::{IsaProbeCache, ProbedIsa};
+pub use job_logger::JobLogger;
 pub use lease::{LeaseManager, LeaseTtl};
+pub use loaded_programs::{LoadedProgram, LoadedProgramCache};
 pub use queue::{JobQueue, JobQueueReceiver};
-pub use runtime::{DaemonHandles, start, start_with_config, start_with_registry};
+pub use runtime::{
+    DaemonHandles, start, start_binds, start_with_config, start_with_config_binds,
+    start_with_dut_registry, start_with_registry,
+};
 pub use server::{AppState, build_router};
-pub use store::{BlobStore, JobStore, LocalFsBlobStore};
+pub use store::{BlobStore, JobProgramRef, JobStore, LocalFsBlobStore};
 pub use worker::Worker;
 
 #[cfg(feature = "sqlite")]
 pub use store::SqliteJobStore;
 pub use types::{
-    Blob, BlobId, Campaign, CampaignId, CampaignState, CampaignTemplate, Event, EventId, Job,
-    JobFilter, JobId, JobKind, JobState, JobStateTag, Lease, LeaseId, NewJob, VerdictSummary,
+    AboutFeatures, AboutInfo, Blob, BlobId, Campaign, CampaignId, CampaignState, CampaignTemplate,
+    Event, EventId, EventRecord, GeneratorKind, Job, JobFilter, JobId, JobKind, JobState,
+    JobStateTag, Lease, LeaseId, LogLevel, NewJob, SnapshotSourceTag, StampedEvent, VerdictSummary,
 };

@@ -14,13 +14,17 @@ description = "Umbrella crate re-exporting the Heimdall hardware verification su
 
 [features]
 default = []
-aegis = ["heimdall-golden/aegis", "heimdall-driver/aegis", "heimdall-daemon?/aegis"]
+aegis = [
+  "heimdall-golden/aegis",
+  "heimdall-driver/aegis",
+  "heimdall-daemon?/aegis",
+]
 serial = ["heimdall-transport/serial"]
 openocd = ["heimdall-transport/openocd"]
 river = ["heimdall-driver/river", "openocd", "heimdall-daemon?/river"]
 spike = ["heimdall-golden/spike"]
 clang-asm = ["heimdall-tools/clang-asm"]
-fuzzer = ["dep:heimdall-fuzzer"]
+fuzzer = ["dep:heimdall-fuzzer", "heimdall-daemon?/fuzzer"]
 fuzzer-aegis = ["fuzzer", "aegis", "heimdall-fuzzer/aegis"]
 daemon = ["dep:heimdall-daemon"]
 tui = ["dep:heimdall-tui"]
@@ -28,6 +32,7 @@ tui = ["dep:heimdall-tui"]
 [dependencies]
 heimdall-core.workspace = true
 heimdall-config.workspace = true
+heimdall-i18n.workspace = true
 heimdall-transport.workspace = true
 heimdall-tools.workspace = true
 heimdall-golden.workspace = true

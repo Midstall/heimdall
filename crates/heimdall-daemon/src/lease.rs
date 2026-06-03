@@ -42,10 +42,21 @@ impl LeaseManager {
         }
     }
 
-    /// Attempt to acquire an exclusive lease on the DUT for the given job.
-    /// Returns `Err(LeaseExpired)` if the DUT is already leased and not yet
-    /// expired.
+    /// Attempt to acquire an exclusive lease on the DUT for the given job
+    /// with the manager's default TTL. Returns `Err(LeaseExpired)` if the DUT
+    /// is already leased and not yet expired.
     pub async fn acquire(&self, dut: DutId, holder: JobId) -> Result<Lease> {
+        self.acquire_with_ttl(dut, holder, self.ttl).await
+    }
+
+    /// Acquire with a per-call TTL override. Used by the worker so each
+    /// job can take a TTL matched to its DUT's `dut.timeouts.lease_secs`.
+    pub async fn acquire_with_ttl(
+        &self,
+        dut: DutId,
+        holder: JobId,
+        ttl: LeaseTtl,
+    ) -> Result<Lease> {
         let mut inner = self.inner.lock().await;
         self.gc_expired(&mut inner);
         if let Some((existing, _)) = inner.by_dut.get(&dut) {
@@ -61,12 +72,12 @@ impl LeaseManager {
             holder,
             acquired_at: now,
             expires_at: now
-                + chrono::Duration::from_std(self.ttl.0)
+                + chrono::Duration::from_std(ttl.0)
                     .unwrap_or_else(|_| chrono::Duration::seconds(60)),
         };
         inner
             .by_dut
-            .insert(dut, (lease.clone(), Instant::now() + self.ttl.0));
+            .insert(dut, (lease.clone(), Instant::now() + ttl.0));
         Ok(lease)
     }
 
@@ -162,6 +173,25 @@ mod tests {
         mgr.release(&DutId::new("d1"), lease.id).await.unwrap();
         // Can acquire again immediately.
         let _ = mgr.acquire(DutId::new("d1"), JobId::new()).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn acquire_with_ttl_overrides_default() {
+        let mgr = LeaseManager::new(LeaseTtl(Duration::from_millis(50)));
+        let _ = mgr
+            .acquire_with_ttl(
+                DutId::new("slow"),
+                JobId::new(),
+                LeaseTtl(Duration::from_secs(60)),
+            )
+            .await
+            .unwrap();
+        tokio::time::sleep(Duration::from_millis(75)).await;
+        let err = mgr
+            .acquire(DutId::new("slow"), JobId::new())
+            .await
+            .unwrap_err();
+        assert!(matches!(err, DaemonError::LeaseExpired(_)));
     }
 
     #[tokio::test]

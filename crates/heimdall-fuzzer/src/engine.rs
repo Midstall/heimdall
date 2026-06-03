@@ -63,7 +63,26 @@ where
     silicon_coverage_map: crate::coverage::CoverageMap,
     strict_coverage: bool,
     divergences: Vec<DivergenceFinding>,
+    iter_observer: Option<IterCallback>,
+    program_observer: Option<ProgramCallback>,
 }
+
+/// Per-iteration progress callback. Called after each iteration with
+/// `(completed, total, last_verdict)`. Wrapped in `Arc` because the engine
+/// is consumed by `run()` but the caller may want to retain a clone (e.g.
+/// to keep an `indicatif::ProgressBar` alive past `run()`).
+pub type IterCallback = std::sync::Arc<dyn Fn(u64, u64, &Verdict) + Send + Sync + 'static>;
+
+/// Per-iteration "the engine is about to feed this artifact to the
+/// runner" callback. Called BEFORE `run_one`, with `(iter_index, &artifact)`.
+/// Used by the daemon to surface "what is the fuzzer running right now"
+/// in the web UI: the daemon stashes the bytes into a cache keyed by
+/// job id, and the `/jobs/:id/disasm` route serves them to the
+/// frontend. The callback receives a borrow so it can clone the bytes
+/// without forcing every caller to pay the clone when no observer is
+/// registered.
+pub type ProgramCallback =
+    std::sync::Arc<dyn Fn(u64, &heimdall_core::Artifact) + Send + Sync + 'static>;
 
 pub struct FuzzerEngineBuilder<G, M, S, D, GM> {
     runner: Option<Runner>,
@@ -75,6 +94,8 @@ pub struct FuzzerEngineBuilder<G, M, S, D, GM> {
     rng_seed: u64,
     step_budget: StepBudget,
     strict_coverage: bool,
+    iter_observer: Option<IterCallback>,
+    program_observer: Option<ProgramCallback>,
 }
 
 impl<G, M, S, D, GM> Default for FuzzerEngineBuilder<G, M, S, D, GM>
@@ -96,6 +117,8 @@ where
             rng_seed: 0,
             step_budget: StepBudget::cycles(1000),
             strict_coverage: false,
+            iter_observer: None,
+            program_observer: None,
         }
     }
 }
@@ -146,6 +169,25 @@ where
         self
     }
 
+    /// Register a per-iteration progress callback. Invoked after each
+    /// iteration completes with `(index, total, last_verdict)`. Used by the
+    /// CLI to drive an `indicatif::ProgressBar`.
+    pub fn with_iter_callback(mut self, cb: IterCallback) -> Self {
+        self.iter_observer = Some(cb);
+        self
+    }
+
+    /// Register a per-iteration program-bytes observer. Invoked BEFORE
+    /// the runner consumes the artifact, with `(iter, &artifact)`. The
+    /// daemon uses this to feed its `LoadedProgramCache` so the
+    /// `/jobs/:id/disasm` route can serve "what is the fuzzer doing
+    /// right now" listings. The CLI path leaves it unset; no extra
+    /// clone happens when the observer is absent.
+    pub fn with_program_observer(mut self, cb: ProgramCallback) -> Self {
+        self.program_observer = Some(cb);
+        self
+    }
+
     pub fn build(self) -> FuzzerEngine<G, M, S, D, GM> {
         FuzzerEngine {
             runner: self.runner.expect("runner not set"),
@@ -161,6 +203,8 @@ where
             silicon_coverage_map: crate::coverage::CoverageMap::default(),
             strict_coverage: self.strict_coverage,
             divergences: Vec::new(),
+            iter_observer: self.iter_observer,
+            program_observer: self.program_observer,
         }
     }
 }
@@ -213,6 +257,16 @@ where
                 }
             };
 
+            // Surface the program bytes BEFORE the runner consumes
+            // them: the daemon's web UI wants "what is the fuzzer
+            // running right now," which is the freshly-built artifact
+            // for this iter regardless of whether the run subsequently
+            // fails. The callback gets a borrow so clones only happen
+            // when an observer is registered.
+            if let Some(cb) = &self.program_observer {
+                cb(iter, &artifact);
+            }
+
             let test = AdHocFuzzTest::new(
                 format!("fuzz-{seed_id}"),
                 self.driver.target(),
@@ -220,10 +274,34 @@ where
                 self.step_budget,
             );
 
-            let res = self
+            // A `run_one` error means the per-iteration test infra (driver,
+            // golden, runner) failed before producing a verdict. For fuzz
+            // that is a routine outcome: a generated program might trap
+            // or loop forever, the driver's wait_halt times out, etc. We
+            // count it as a per-iteration `Verdict::Error`, fire the
+            // observer callback, and KEEP GOING rather than tearing the
+            // whole fuzz session down on the first bad seed. The driver
+            // is responsible for leaving the DUT in a state where the
+            // next iteration's load+resume can proceed (River driver
+            // force-halts on wait_halt timeout).
+            let res = match self
                 .runner
                 .run_one(&test, dut, &mut self.driver, &mut self.golden)
-                .await?;
+                .await
+            {
+                Ok(r) => r,
+                Err(e) => {
+                    warn!(?e, iteration = iter, "fuzz iteration errored, continuing");
+                    errors += 1;
+                    let verdict = Verdict::Error {
+                        message: e.to_string(),
+                    };
+                    if let Some(cb) = &self.iter_observer {
+                        cb(iter + 1, iterations, &verdict);
+                    }
+                    continue;
+                }
+            };
 
             match &res.verdict {
                 Verdict::Pass => passes += 1,
@@ -291,6 +369,10 @@ where
 
             if matches!(res.verdict, Verdict::Error { .. }) {
                 warn!(?res.verdict, iteration = iter, "fuzz iteration errored");
+            }
+
+            if let Some(cb) = &self.iter_observer {
+                cb(iter + 1, iterations, &res.verdict);
             }
         }
 

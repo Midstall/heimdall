@@ -31,6 +31,7 @@ const DELIM: u8 = 0x1a;
 #[derive(Default)]
 pub struct MockOpenOcdServer {
     responses: HashMap<String, String>,
+    prefix_responses: Vec<(String, String)>,
 }
 
 pub struct RunningServer {
@@ -49,18 +50,31 @@ impl MockOpenOcdServer {
         self
     }
 
+    /// Respond when the incoming command STARTS WITH `prefix`. Useful for
+    /// `load_image` whose actual command embeds a random tempfile path.
+    /// Exact-match `respond` always wins over prefix matches.
+    pub fn respond_prefix(
+        mut self,
+        prefix: impl Into<String>,
+        response: impl Into<String>,
+    ) -> Self {
+        self.prefix_responses.push((prefix.into(), response.into()));
+        self
+    }
+
     pub async fn start(self) -> RunningServer {
         let listener = TcpListener::bind("127.0.0.1:0")
             .await
             .expect("bind ephemeral port");
         let addr = listener.local_addr().expect("local_addr");
         let responses = Arc::new(self.responses);
+        let prefixes = Arc::new(self.prefix_responses);
         let received: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
         let received_for_task = received.clone();
         let handle = tokio::spawn(async move {
             // Accept exactly one connection. If a test needs more, extend.
             if let Ok((mut sock, _)) = listener.accept().await {
-                handle_connection(&mut sock, &responses, &received_for_task).await;
+                handle_connection(&mut sock, &responses, &prefixes, &received_for_task).await;
             }
         });
         RunningServer {
@@ -89,6 +103,7 @@ impl RunningServer {
 async fn handle_connection(
     sock: &mut TcpStream,
     responses: &HashMap<String, String>,
+    prefixes: &[(String, String)],
     received: &Arc<Mutex<Vec<String>>>,
 ) {
     let mut buf = [0u8; 1024];
@@ -109,7 +124,16 @@ async fn handle_connection(
                 let mut log = received.lock().await;
                 log.push(cmd.clone());
             }
-            let resp = responses.get(&cmd).cloned().unwrap_or_default();
+            let resp = responses
+                .get(&cmd)
+                .cloned()
+                .or_else(|| {
+                    prefixes
+                        .iter()
+                        .find(|(p, _)| cmd.starts_with(p.as_str()))
+                        .map(|(_, r)| r.clone())
+                })
+                .unwrap_or_default();
             if sock.write_all(resp.as_bytes()).await.is_err() {
                 return;
             }

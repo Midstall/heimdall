@@ -18,7 +18,7 @@ use tracing::{debug, instrument};
 use crate::error::GoldenError;
 use crate::trait_def::{CoverageSource, GoldenModel, Result, StepOutcome};
 
-pub use parse::{RawTrace, parse_raw_ascii};
+pub use parse::{RawTrace, SpiceRawParseError, parse_raw_ascii};
 
 /// Configuration for a SPICE node watched by the golden.
 #[derive(Debug, Clone)]

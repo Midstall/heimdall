@@ -159,7 +159,7 @@ Every crate in `crates/` is publishable on its own. Build only what you need.
 ## Crates
 
 | Crate                | Role                                              |
-|----------------------|---------------------------------------------------|
+| -------------------- | ------------------------------------------------- |
 | `heimdall`           | Umbrella re-export.                               |
 | `heimdall-core`      | IDs, verdicts, observations, stimuli, artifacts.  |
 | `heimdall-config`    | TOML schema + validation.                         |

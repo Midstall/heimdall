@@ -11,7 +11,7 @@ class HeimdallPalette:
 
     # Gradient endpoints used on the logomark stroke + halo.
     accent_start = "#bb9af7"  # purple
-    accent_end = "#7dcfff"    # cyan / light blue
+    accent_end = "#7dcfff"  # cyan / light blue
 
     # Foreground text colors.
     fg_bright = "#c0caf5"

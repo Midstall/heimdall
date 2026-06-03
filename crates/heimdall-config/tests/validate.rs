@@ -7,6 +7,25 @@ fn example_validates() {
 }
 
 #[test]
+fn dut_timeouts_block_parses_and_defaults_apply() {
+    let cfg = load_from_path("testdata/timeouts.toml").unwrap();
+    let dut = &cfg.duts[0];
+    assert_eq!(dut.timeouts.openocd_startup_ms, 180_000);
+    assert_eq!(dut.timeouts.openocd_rpc_ms, 120_000);
+    assert_eq!(dut.timeouts.lease_secs, 600);
+    assert_eq!(dut.timeouts.wait_halt_max_ms, 180_000);
+
+    // The example.toml has no [dut.timeouts] block so we get the
+    // silicon-friendly defaults.
+    let plain = load_from_path("testdata/example.toml").unwrap();
+    let pd = plain.duts[0].timeouts;
+    assert_eq!(pd.openocd_startup_ms, 10_000);
+    assert_eq!(pd.openocd_rpc_ms, 5_000);
+    assert_eq!(pd.lease_secs, 60);
+    assert_eq!(pd.wait_halt_max_ms, 30_000);
+}
+
+#[test]
 fn duplicate_transport_id_rejected() {
     let cfg = load_from_path("testdata/duplicate_transport.toml").unwrap();
     let err = validate(&cfg).unwrap_err();
@@ -37,6 +56,8 @@ fn base_cfg_with_dut() -> heimdall_config::ConfigFile {
             bringup: None,
             netlist: None,
             spice_watches: vec![],
+            timeouts: Default::default(),
+            isa: None,
         }],
         transport: heimdall_config::TransportSection {
             gpio: vec![GpioTransportCfg {

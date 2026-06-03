@@ -1,0 +1,48 @@
+[package]
+name = "heimdall-web"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Heimdall web UI: SSR templates, static-asset embed, and the Axum router that serves them. Generic over a WebContext trait so it doesn't pull in the daemon's storage stack."
+
+[features]
+default = []
+
+[dependencies]
+heimdall-core.workspace = true
+heimdall-i18n.workspace = true
+async-trait.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+
+axum.workspace = true
+askama = { workspace = true }
+rust-embed = { workspace = true }
+mime_guess = { workspace = true }
+
+[build-dependencies]
+# The Rust-native bundler being built as Vite's successor. Pulls in
+# oxc (parser + codegen + minifier) and runs the whole TS -> bundled,
+# minified JS pipeline in-process. No Node required.
+rolldown = "1.0.3"
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+# Icon set: read at build time, font bytes + selected codepoints
+# baked into the embedded asset bundle. See build.rs::stage_lucide.
+lucide-icons = { workspace = true }
+# Wire types + ts-rs derives. The build.rs calls `<Type>::export_all`
+# on each so the TypeScript bindings under
+# `frontend/src/bindings/` regenerate on every cargo build, with
+# no need to commit the generated `.ts` files. heimdall-api stays
+# a thin leaf so this build-dep doesn't pull in the daemon
+# (which would create a heimdall-daemon -> heimdall-web cycle).
+heimdall-api = { workspace = true, features = ["bindings"] }
+heimdall-core = { workspace = true, features = ["bindings"] }
+heimdall-disasm = { workspace = true, features = ["bindings"] }
+ts-rs = { workspace = true, features = ["chrono-impl", "uuid-impl"] }

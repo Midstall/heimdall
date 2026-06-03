@@ -20,7 +20,7 @@ use heimdall_core::{Artifact, ArtifactKind, DutKind, SeedId};
 use rand::{Rng, RngCore};
 use target_lexicon::Triple;
 
-use crate::generator::raw_asm::{IsaTag, Rv64};
+use crate::generator::raw_asm::{IsaTag, Rv64, ZERO_INIT_PROLOGUE_LEN, addi_xn_zero};
 use crate::traits::Generator;
 
 /// Random binary i64 operation classes Cranelift IR can emit.
@@ -51,33 +51,62 @@ pub struct CraneliftGen<I: IsaTag> {
     /// Number of operations in the generated function. The IR includes one
     /// instruction per op plus the prologue/epilogue.
     pub ops_per_function: usize,
+    /// When true (default), prepend the same 31-insn `addi xN, x0, 0`
+    /// prologue RawAsmGen uses so differential fuzz against spike sees
+    /// the same all-zero GPR entry state on both sides regardless of
+    /// the bootrom's seeded values.
+    pub zero_init_prologue: bool,
     isa: OwnedTargetIsa,
     _isa: PhantomData<I>,
+}
+
+/// Concrete error returned by [`CraneliftGen::rv64`]. Each variant
+/// pinpoints which step of the Cranelift backend initialisation
+/// failed so callers can log a structured error instead of a flat
+/// string.
+#[derive(Debug, thiserror::Error)]
+pub enum CraneliftInitError {
+    #[error("cranelift setting `{key}`: {detail}")]
+    Setting { key: &'static str, detail: String },
+    #[error("triple parse: {0}")]
+    Triple(String),
+    #[error("isa lookup: {0}")]
+    IsaLookup(String),
+    #[error("isa finish: {0}")]
+    IsaFinish(String),
 }
 
 impl CraneliftGen<Rv64> {
     /// Construct a generator targeting riscv64-unknown-elf with the default
     /// cranelift backend settings (no optimizations beyond defaults).
-    pub fn rv64() -> Result<Self, String> {
+    pub fn rv64() -> Result<Self, CraneliftInitError> {
         let mut flag_builder = settings::builder();
         flag_builder
             .set("opt_level", "speed")
-            .map_err(|e| format!("flag set opt_level: {e}"))?;
+            .map_err(|e| CraneliftInitError::Setting {
+                key: "opt_level",
+                detail: e.to_string(),
+            })?;
         flag_builder
             .set("is_pic", "false")
-            .map_err(|e| format!("flag set is_pic: {e}"))?;
+            .map_err(|e| CraneliftInitError::Setting {
+                key: "is_pic",
+                detail: e.to_string(),
+            })?;
         let flags = settings::Flags::new(flag_builder);
 
         let triple: Triple = "riscv64-unknown-elf"
             .parse()
-            .map_err(|e| format!("triple parse: {e}"))?;
-        let isa_builder = lookup(triple).map_err(|e| format!("isa lookup: {e}"))?;
+            .map_err(|e: target_lexicon::ParseError| CraneliftInitError::Triple(e.to_string()))?;
+        let isa_builder =
+            lookup(triple).map_err(|e| CraneliftInitError::IsaLookup(e.to_string()))?;
         let isa = isa_builder
             .finish(flags)
-            .map_err(|e| format!("isa finish: {e}"))?;
+            .map_err(|e| CraneliftInitError::IsaFinish(e.to_string()))?;
 
         Ok(Self {
             ops_per_function: 8,
+            zero_init_prologue: true,
             isa,
             _isa: PhantomData,
         })
@@ -85,6 +114,13 @@ impl CraneliftGen<Rv64> {
 
     pub fn with_ops_per_function(mut self, n: usize) -> Self {
         self.ops_per_function = n;
+        self
+    }
+
+    /// Toggle the zero-init prologue. Off when the caller wants
+    /// bootloader-seeded GPR state to flow into the body unchanged.
+    pub fn with_zero_init_prologue(mut self, on: bool) -> Self {
+        self.zero_init_prologue = on;
         self
     }
 }
@@ -146,7 +182,20 @@ impl Generator for CraneliftGen<Rv64> {
             .compile(&*self.isa, &mut ctrl_plane)
             .expect("cranelift compile");
         // `code_buffer()` gives the raw instruction bytes.
-        let bytes = compiled.code_buffer().to_vec();
+        let body = compiled.code_buffer();
+
+        let prologue_len = if self.zero_init_prologue {
+            ZERO_INIT_PROLOGUE_LEN
+        } else {
+            0
+        };
+        let mut bytes = Vec::with_capacity(prologue_len * 4 + body.len());
+        if self.zero_init_prologue {
+            for n in 1..32u32 {
+                bytes.extend_from_slice(&addi_xn_zero(n).to_le_bytes());
+            }
+        }
+        bytes.extend_from_slice(body);
 
         Artifact::new(ArtifactKind::RawBytes, bytes)
     }

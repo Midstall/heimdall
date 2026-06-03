@@ -93,13 +93,12 @@
           {
             system,
             pkgs,
+            final,
             ...
           }:
           let
             inherit (pkgs) lib;
             craneLib = crane.mkLib pkgs;
-
-            heimdall-logo-pkg = pkgs.callPackage ./pkgs/heimdall-logo { };
 
             commonArgs = {
               inherit src;
@@ -108,16 +107,19 @@
               pname = "heimdall-eda";
               strictDeps = true;
               cargoExtraArgs = "--package heimdall-eda";
-              # Pre-rendered SVGs picked up by heimdall-daemon's build.rs so
-              # the favicon and logomark are embedded without committing
-              # generated files into the source tree.
-              HEIMDALL_LOGO_SVGS = "${heimdall-logo-pkg.passthru.svgs}";
-              # Picked up by heimdall_core::VERSION so the binary reports
-              # the full flakever version instead of Cargo.toml's `0.1.0`.
+              HEIMDALL_LOGO_SVGS = "${final.heimdall-logo.passthru.svgs}";
               HEIMDALL_FULL_VERSION = flakeverConfig.version;
             };
 
             cargoArtifacts = craneLib.buildDepsOnly commonArgs;
+
+            testRuntimeInputs = [
+              pkgs.llvm
+              pkgs.ngspice
+            ]
+            ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux [
+              pkgs.spike
+            ];
           in
           {
             _module.args.pkgs = import inputs.nixpkgs {
@@ -128,9 +130,31 @@
               ];
             };
 
-            treefmt.programs = {
-              nixfmt.enable = true;
-              rustfmt.enable = true;
+            treefmt = {
+              programs = {
+                nixfmt.enable = true;
+                rustfmt.enable = true;
+                taplo.enable = true;
+                ruff-format.enable = true;
+                yamlfmt.enable = true;
+                prettier.enable = true;
+              };
+              settings.formatter.prettier.includes = [
+                "*.ts"
+                "*.css"
+                "*.md"
+                "*.json"
+              ];
+              settings.global.excludes = [
+                "Cargo.lock"
+                "*.lock"
+                "testdata/**"
+                "crates/heimdall-web/templates/*.html"
+                "**/*.S"
+                "**/*.sp"
+                "**/*.elf"
+                "**/LICENSE"
+              ];
             };
 
             legacyPackages = pkgs;
@@ -145,23 +169,16 @@
                   cargoArtifacts
                   ;
               };
-              heimdall-logo = heimdall-logo-pkg;
+              heimdall-logo = pkgs.callPackage ./pkgs/heimdall-logo { };
             };
 
             packages.default = pkgs.heimdall-eda;
-            packages.heimdall-logo = heimdall-logo-pkg;
-            packages.heimdall-logo-svgs = heimdall-logo-pkg.passthru.svgs;
-            # Dev shell carries python3 + the heimdall-logo package so a
-            # plain `cargo build` from inside `nix develop` can regenerate
-            # the SVGs without setting $HEIMDALL_LOGO_SVGS.
-            devShells.default = pkgs.heimdall-eda.shell.overrideAttrs (old: {
-              nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [
-                (pkgs.python3.withPackages (_: [ heimdall-logo-pkg ]))
-              ];
-            });
+            packages.heimdall-logo = pkgs.heimdall-logo;
+            packages.heimdall-logo-svgs = pkgs.heimdall-logo.passthru.svgs;
+            devShells.default = pkgs.heimdall-eda.shell;
 
             checks = {
-              inherit (pkgs) heimdall-eda;
+              inherit (pkgs) heimdall-eda heimdall-logo;
 
               workspace-clippy = craneLib.cargoClippy (
                 commonArgs
@@ -179,6 +196,7 @@
                   doCheck = true;
 
                   cargoTestExtraArgs = "--workspace --doc";
+                  nativeBuildInputs = (commonArgs.nativeBuildInputs or [ ]) ++ testRuntimeInputs;
                 }
               );
 
@@ -193,6 +211,7 @@
                   partitionType = "count";
                   cargoNextestExtraArgs = "--workspace --all-targets";
                   cargoNextestPartitionsExtraArgs = "--no-tests=pass";
+                  nativeBuildInputs = (commonArgs.nativeBuildInputs or [ ]) ++ testRuntimeInputs;
                 }
               );
 

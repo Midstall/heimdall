@@ -1,5 +1,15 @@
 //! Minimal ngspice ASCII .raw parser. Extracts per-variable traces.
 
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum SpiceRawParseError {
+    #[error("No. Variables: parse failed: {0}")]
+    NVars(#[source] std::num::ParseIntError),
+    #[error("No. Points: parse failed: {0}")]
+    NPoints(#[source] std::num::ParseIntError),
+}
+
 #[derive(Debug, Clone)]
 pub struct RawTrace {
     pub name: String,
@@ -51,7 +61,7 @@ impl RawTrace {
 ///     <idx> <time> <var1> <var2> ...
 ///
 /// We collect per-variable Vec<f64>.
-pub fn parse_raw_ascii(text: &str) -> Result<Vec<RawTrace>, String> {
+pub fn parse_raw_ascii(text: &str) -> Result<Vec<RawTrace>, SpiceRawParseError> {
     let mut n_vars = 0usize;
     let mut n_points = 0usize;
     let mut variables: Vec<(String, String)> = Vec::new(); // (name, kind)
@@ -68,9 +78,9 @@ pub fn parse_raw_ascii(text: &str) -> Result<Vec<RawTrace>, String> {
         }
         if !in_values {
             if let Some(rest) = l.strip_prefix("No. Variables:") {
-                n_vars = rest.trim().parse().map_err(|e| format!("n_vars: {e}"))?;
+                n_vars = rest.trim().parse().map_err(SpiceRawParseError::NVars)?;
             } else if let Some(rest) = l.strip_prefix("No. Points:") {
-                n_points = rest.trim().parse().map_err(|e| format!("n_points: {e}"))?;
+                n_points = rest.trim().parse().map_err(SpiceRawParseError::NPoints)?;
             } else if l == "Variables:" {
                 in_variables = true;
             } else if l == "Values:" {

@@ -32,14 +32,60 @@ impl std::fmt::Debug for DispatchBundle {
     }
 }
 
+/// Parameters for a fuzz session resolved from a [`JobKind::Fuzz`] payload.
+/// The factory layer copies fields straight from the job; the worker side
+/// feeds them into [`heimdall_fuzzer::FuzzerEngine::builder`].
+#[derive(Debug, Clone)]
+pub struct FuzzConfig {
+    pub iterations: u64,
+    pub seed: u64,
+    pub insn_count: usize,
+    pub cycles: u64,
+    pub strict_coverage: bool,
+    pub generator: crate::types::GeneratorKind,
+    /// Resolved ISA for the target DUT. Sourced from the DUT
+    /// registry's `[dut.isa]` block; the worker layers a JTAG
+    /// `misa` probe on top if the driver supports it. `None` means
+    /// "use the generator's library default (RV64 + I + M)" for
+    /// backwards compat with pre-isa configs.
+    pub isa: Option<crate::dut_registry::IsaSpec>,
+}
+
+/// Fuzz-session dispatch bundle. Factory returns this when the job is a
+/// `JobKind::Fuzz` and the worker drives the engine to completion.
+pub struct FuzzDispatch {
+    pub driver: Box<dyn TestDriver>,
+    pub golden: Box<dyn GoldenModel>,
+    pub config: FuzzConfig,
+}
+
+impl std::fmt::Debug for FuzzDispatch {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FuzzDispatch")
+            .field("driver", &self.driver.target())
+            .field("config", &self.config)
+            .finish_non_exhaustive()
+    }
+}
+
+/// Discriminated dispatch result. Single-shot tests go through
+/// `Dispatch::Test`; coverage-guided fuzz sessions go through
+/// `Dispatch::Fuzz`. Same factory contract, different worker routing.
+#[derive(Debug)]
+pub enum Dispatch {
+    Test(DispatchBundle),
+    Fuzz(FuzzDispatch),
+}
+
 /// Constructs the per-job machinery. One implementation per JobKind family.
 #[async_trait]
 pub trait DriverFactory: Send + Sync {
     /// Whether this factory handles the given JobKind.
     fn handles(&self, kind: &JobKind) -> bool;
 
-    /// Build the dispatch bundle for the job.
-    async fn build(&self, job: &Job) -> Result<DispatchBundle>;
+    /// Build the dispatch bundle for the job. Each factory returns the
+    /// `Dispatch` variant matching the JobKind it claims via `handles`.
+    async fn build(&self, job: &Job) -> Result<Dispatch>;
 }
 
 /// Maps JobKinds to factories. The worker calls dispatch() per job and the
@@ -94,12 +140,15 @@ impl DriverRegistry {
             r = r.with(Arc::new(RiverRealFactory {
                 registry: dut_registry.clone(),
             }));
+            r = r.with(Arc::new(RiverFuzzFactory {
+                registry: dut_registry.clone(),
+            }));
         }
         let _ = &dut_registry; // silence unused warning if no features
         r
     }
 
-    pub async fn dispatch(&self, job: &Job) -> Result<DispatchBundle> {
+    pub async fn dispatch(&self, job: &Job) -> Result<Dispatch> {
         for f in &self.factories {
             if f.handles(&job.kind) {
                 return f.build(job).await;
@@ -125,18 +174,18 @@ impl DriverFactory for MockHelloFactory {
     }
 
     #[instrument(skip(self, _job))]
-    async fn build(&self, _job: &Job) -> Result<DispatchBundle> {
+    async fn build(&self, _job: &Job) -> Result<Dispatch> {
         let driver = MockDriver::new(DutKind::RiverRc1Nano)
-            .with_state(State::new().with("a0", ValueRepr::U64(0x42)));
+            .with_state(State::new().with("x10", ValueRepr::U64(0x42)));
         let golden = MockGoldenModel::new(DutKind::RiverRc1Nano);
         let test = MockHelloTest {
             target: DutKind::RiverRc1Nano,
         };
-        Ok(DispatchBundle {
+        Ok(Dispatch::Test(DispatchBundle {
             driver: Box::new(driver),
             golden: Box::new(golden),
             test: Box::new(test),
-        })
+        }))
     }
 }
 
@@ -155,7 +204,7 @@ impl Test for MockHelloTest {
     async fn build(&self, _ctx: &mut BuildCtx<'_>) -> std::result::Result<Plan, TestError> {
         Ok(Plan {
             input: Artifact::new(ArtifactKind::Asm, &b"li a0, 0x42"[..]),
-            expected: State::new().with("a0", ValueRepr::U64(0x42)),
+            expected: State::new().with("x10", ValueRepr::U64(0x42)),
             budget: StepBudget::cycles(1000),
             inputs: std::collections::BTreeMap::new(),
         })
@@ -176,19 +225,19 @@ impl DriverFactory for MockBootRiverElfFactory {
     }
 
     #[instrument(skip(self, job))]
-    async fn build(&self, job: &Job) -> Result<DispatchBundle> {
-        let driver =
-            MockDriver::new(job.dut_kind).with_state(State::new().with("a0", ValueRepr::U64(0x42)));
+    async fn build(&self, job: &Job) -> Result<Dispatch> {
+        let driver = MockDriver::new(job.dut_kind)
+            .with_state(State::new().with("x10", ValueRepr::U64(0x42)));
         let golden = MockGoldenModel::new(job.dut_kind)
-            .with_state(State::new().with("a0", ValueRepr::U64(0x42)));
+            .with_state(State::new().with("x10", ValueRepr::U64(0x42)));
         let test = MockBootRiverElfTest {
             target: job.dut_kind,
         };
-        Ok(DispatchBundle {
+        Ok(Dispatch::Test(DispatchBundle {
             driver: Box::new(driver),
             golden: Box::new(golden),
             test: Box::new(test),
-        })
+        }))
     }
 }
 
@@ -207,7 +256,7 @@ impl Test for MockBootRiverElfTest {
     async fn build(&self, _ctx: &mut BuildCtx<'_>) -> std::result::Result<Plan, TestError> {
         Ok(Plan {
             input: Artifact::new(ArtifactKind::ElfRiscv, &b"\x7fELF"[..]),
-            expected: State::new().with("a0", ValueRepr::U64(0x42)),
+            expected: State::new().with("x10", ValueRepr::U64(0x42)),
             budget: StepBudget::cycles(1000),
             inputs: std::collections::BTreeMap::new(),
         })
@@ -252,7 +301,7 @@ mod aegis_factory {
             matches!(kind, JobKind::LoadAegisBitstream { .. })
         }
 
-        async fn build(&self, job: &Job) -> Result<DispatchBundle> {
+        async fn build(&self, job: &Job) -> Result<Dispatch> {
             let (descriptor_json, bitstream) = decode_load_bitstream(&job.kind)?;
             let mock = MockTransport::new();
             let pins = BitbangPins {
@@ -265,7 +314,7 @@ mod aegis_factory {
                 .with_clock_delay(std::time::Duration::from_nanos(1));
             let driver = AegisFpgaDriver::new(job.dut_kind, jtag);
             let golden = MockGoldenModel::new(job.dut_kind).with_state(State::new());
-            Ok(DispatchBundle {
+            Ok(Dispatch::Test(DispatchBundle {
                 driver: Box::new(driver),
                 golden: Box::new(golden),
                 test: Box::new(AegisLoadTest {
@@ -273,7 +322,7 @@ mod aegis_factory {
                     descriptor_json,
                     bitstream,
                 }),
-            })
+            }))
         }
     }
 
@@ -294,7 +343,7 @@ mod aegis_factory {
             )
         }
 
-        async fn build(&self, job: &Job) -> Result<DispatchBundle> {
+        async fn build(&self, job: &Job) -> Result<Dispatch> {
             let golden = Box::new(MockGoldenModel::new(job.dut_kind).with_state(State::new()))
                 as Box<dyn heimdall_golden::GoldenModel>;
 
@@ -372,7 +421,12 @@ mod aegis_factory {
                     ));
                 }
                 TransportSpec::Openocd { endpoint } => {
-                    let ocd = OpenOcdJtagTransport::new(endpoint).with_tap_name(AEGIS_TAP_NAME);
+                    let timeouts = dut_record.as_ref().map(|r| r.timeouts).unwrap_or_default();
+                    let ocd = OpenOcdJtagTransport::new(endpoint)
+                        .with_tap_name(AEGIS_TAP_NAME)
+                        .with_rpc_timeout(std::time::Duration::from_millis(
+                            timeouts.openocd_rpc_ms,
+                        ));
                     let mut d = AegisFpgaDriver::new(job.dut_kind, ocd);
                     attach_pinmap(&mut d, dut_record.as_ref());
                     Box::new(d)
@@ -383,6 +437,7 @@ mod aegis_factory {
                     tcl_port,
                     extra_args,
                 } => {
+                    let timeouts = dut_record.as_ref().map(|r| r.timeouts).unwrap_or_default();
                     let spawned =
                         heimdall_transport::openocd::spawn::SpawnedOpenocdJtagTransport::new(
                             binary.clone(),
@@ -390,7 +445,13 @@ mod aegis_factory {
                             tcl_port,
                         )
                         .with_extra_args(extra_args.clone())
-                        .with_tap_name(AEGIS_TAP_NAME);
+                        .with_tap_name(AEGIS_TAP_NAME)
+                        .with_startup_timeout(std::time::Duration::from_millis(
+                            timeouts.openocd_startup_ms,
+                        ))
+                        .with_rpc_timeout(
+                            std::time::Duration::from_millis(timeouts.openocd_rpc_ms),
+                        );
                     let mut d = AegisFpgaDriver::new(job.dut_kind, spawned);
                     attach_pinmap(&mut d, dut_record.as_ref());
                     Box::new(d)
@@ -402,11 +463,11 @@ mod aegis_factory {
                 }
             };
 
-            Ok(DispatchBundle {
+            Ok(Dispatch::Test(DispatchBundle {
                 driver,
                 golden,
                 test,
-            })
+            }))
         }
     }
 
@@ -604,7 +665,7 @@ mod river_factory {
             matches!(kind, JobKind::BootRiverElf { .. })
         }
 
-        async fn build(&self, job: &Job) -> Result<DispatchBundle> {
+        async fn build(&self, job: &Job) -> Result<Dispatch> {
             let (elf_bytes, cycles) = decode_river_kind(&job.kind)?;
 
             let dut = self.registry.lookup(&job.dut).ok_or_else(|| {
@@ -614,12 +675,15 @@ mod river_factory {
                 ))
             })?;
 
-            // Build the driver boxed as dyn TestDriver so both transport arms
-            // can unify behind a single type-erased pointer.
+            let t = dut.timeouts;
+            let rpc_to = std::time::Duration::from_millis(t.openocd_rpc_ms);
+            let startup_to = std::time::Duration::from_millis(t.openocd_startup_ms);
+            let wait_max = std::time::Duration::from_millis(t.wait_halt_max_ms);
+
             let driver: Box<dyn TestDriver> = match &dut.jtag {
                 TransportSpec::Openocd { endpoint } => {
-                    let jtag = OpenOcdJtagTransport::new(*endpoint);
-                    Box::new(RiverCpuDriver::new(job.dut_kind, jtag))
+                    let jtag = OpenOcdJtagTransport::new(*endpoint).with_rpc_timeout(rpc_to);
+                    Box::new(RiverCpuDriver::new(job.dut_kind, jtag).with_wait_halt_max(wait_max))
                 }
                 TransportSpec::OpenocdSpawned {
                     binary,
@@ -632,8 +696,12 @@ mod river_factory {
                         config_file.clone(),
                         *tcl_port,
                     )
-                    .with_extra_args(extra_args.clone());
-                    Box::new(RiverCpuDriver::new(job.dut_kind, spawned))
+                    .with_extra_args(extra_args.clone())
+                    .with_startup_timeout(startup_to)
+                    .with_rpc_timeout(rpc_to);
+                    Box::new(
+                        RiverCpuDriver::new(job.dut_kind, spawned).with_wait_halt_max(wait_max),
+                    )
                 }
                 other => {
                     return Err(crate::error::DaemonError::Config(format!(
@@ -666,11 +734,11 @@ mod river_factory {
                 cycles,
             });
 
-            Ok(DispatchBundle {
+            Ok(Dispatch::Test(DispatchBundle {
                 driver,
                 golden,
                 test,
-            })
+            }))
         }
     }
 
@@ -713,10 +781,134 @@ mod river_factory {
             })
         }
     }
+
+    /// Factory for `JobKind::Fuzz` against a River DUT. Same driver+golden
+    /// construction logic as `RiverRealFactory` (lives behind it via shared
+    /// helpers); difference is the dispatch variant and the carried fuzz
+    /// config. Routed by `DriverFactory::handles` matching `JobKind::Fuzz`.
+    pub struct RiverFuzzFactory {
+        pub registry: Arc<DutRegistry>,
+    }
+
+    #[async_trait]
+    impl DriverFactory for RiverFuzzFactory {
+        fn handles(&self, kind: &JobKind) -> bool {
+            // Only River DUTs are supported today. We match Fuzz here and
+            // re-check the DUT family in `build`.
+            matches!(kind, JobKind::Fuzz { .. })
+        }
+
+        async fn build(&self, job: &Job) -> Result<Dispatch> {
+            use heimdall_core::kind::Family;
+            if job.dut_kind.family() != Family::Cpu {
+                return Err(crate::error::DaemonError::Config(format!(
+                    "river fuzz factory: dut_kind `{:?}` is not a CPU; fuzz currently \
+                     only supports the River CPU family",
+                    job.dut_kind
+                )));
+            }
+            let (iterations, seed, insn_count, cycles, strict_coverage, generator) = match &job.kind
+            {
+                JobKind::Fuzz {
+                    iterations,
+                    seed,
+                    insn_count,
+                    cycles,
+                    strict_coverage,
+                    generator,
+                } => (
+                    *iterations,
+                    *seed,
+                    *insn_count,
+                    *cycles,
+                    *strict_coverage,
+                    *generator,
+                ),
+                _ => {
+                    return Err(crate::error::DaemonError::Config(
+                        "river fuzz factory: wrong JobKind".into(),
+                    ));
+                }
+            };
+
+            let dut = self.registry.lookup(&job.dut).ok_or_else(|| {
+                crate::error::DaemonError::Config(format!(
+                    "river fuzz factory: dut `{}` not in registry",
+                    job.dut.0
+                ))
+            })?;
+
+            let t = dut.timeouts;
+            let rpc_to = std::time::Duration::from_millis(t.openocd_rpc_ms);
+            let startup_to = std::time::Duration::from_millis(t.openocd_startup_ms);
+            let wait_max = std::time::Duration::from_millis(t.wait_halt_max_ms);
+
+            let driver: Box<dyn TestDriver> = match &dut.jtag {
+                TransportSpec::Openocd { endpoint } => {
+                    let jtag = OpenOcdJtagTransport::new(*endpoint).with_rpc_timeout(rpc_to);
+                    Box::new(RiverCpuDriver::new(job.dut_kind, jtag).with_wait_halt_max(wait_max))
+                }
+                TransportSpec::OpenocdSpawned {
+                    binary,
+                    config_file,
+                    tcl_port,
+                    extra_args,
+                } => {
+                    let spawned = SpawnedOpenocdJtagTransport::new(
+                        binary.clone(),
+                        config_file.clone(),
+                        *tcl_port,
+                    )
+                    .with_extra_args(extra_args.clone())
+                    .with_startup_timeout(startup_to)
+                    .with_rpc_timeout(rpc_to);
+                    Box::new(
+                        RiverCpuDriver::new(job.dut_kind, spawned).with_wait_halt_max(wait_max),
+                    )
+                }
+                other => {
+                    return Err(crate::error::DaemonError::Config(format!(
+                        "river fuzz factory only supports openocd or openocd-spawn transport; got {other:?}"
+                    )));
+                }
+            };
+
+            let golden_spec = self
+                .registry
+                .golden_for(job.dut_kind)
+                .cloned()
+                .unwrap_or(GoldenSpec::Mock);
+            let golden: Box<dyn heimdall_golden::GoldenModel> = match golden_spec {
+                GoldenSpec::Mock => Box::new(MockGoldenModel::new(job.dut_kind)),
+                GoldenSpec::SpikeOneShot { binary, extra_args } => {
+                    Box::new(SpikeOneShot::new(binary, job.dut_kind).with_extra_args(extra_args))
+                }
+                GoldenSpec::DartRpc { .. } => {
+                    return Err(crate::error::DaemonError::Config(
+                        "river fuzz factory: DartRpc golden is not yet supported".into(),
+                    ));
+                }
+            };
+
+            Ok(Dispatch::Fuzz(FuzzDispatch {
+                driver,
+                golden,
+                config: FuzzConfig {
+                    iterations,
+                    seed,
+                    insn_count,
+                    cycles,
+                    strict_coverage,
+                    generator,
+                    isa: dut.isa.clone(),
+                },
+            }))
+        }
+    }
 }
 
 #[cfg(feature = "river")]
-pub use river_factory::{BootRiverElfTest, RiverRealFactory};
+pub use river_factory::{BootRiverElfTest, RiverFuzzFactory, RiverRealFactory};
 
 #[cfg(all(test, feature = "river"))]
 mod river_factory_tests {
@@ -742,6 +934,8 @@ mod river_factory_tests {
             bringup: None,
             netlist: None,
             spice_watches: vec![],
+            timeouts: Default::default(),
+            isa: None,
         });
         let factory = RiverRealFactory {
             registry: Arc::new(registry),
@@ -762,8 +956,13 @@ mod river_factory_tests {
             updated_at: Utc::now(),
         };
         assert!(factory.handles(&job.kind));
-        let bundle = factory.build(&job).await.expect("build");
-        assert_eq!(bundle.driver.target(), DutKind::RiverRc1Nano);
+        let dispatch = factory.build(&job).await.expect("build");
+        match dispatch {
+            Dispatch::Test(bundle) => {
+                assert_eq!(bundle.driver.target(), DutKind::RiverRc1Nano);
+            }
+            other => panic!("expected Dispatch::Test, got {other:?}"),
+        }
     }
 
     #[tokio::test]
@@ -778,6 +977,8 @@ mod river_factory_tests {
             bringup: None,
             netlist: None,
             spice_watches: vec![],
+            timeouts: Default::default(),
+            isa: None,
         });
         let factory = RiverRealFactory {
             registry: Arc::new(registry),
@@ -798,5 +999,94 @@ mod river_factory_tests {
             format!("{err}").contains("only supports openocd"),
             "got: {err}"
         );
+    }
+
+    #[tokio::test]
+    async fn river_fuzz_factory_builds_for_openocd_dut() {
+        let mut registry = DutRegistry::new();
+        registry.insert(DutRecord {
+            id: DutId::new("river-1"),
+            kind: DutKind::RiverRc1Nano,
+            chip_serial: None,
+            jtag: TransportSpec::Openocd {
+                endpoint: "127.0.0.1:6666".parse().unwrap(),
+            },
+            pad_map: IoPinmap::default(),
+            bringup: None,
+            netlist: None,
+            spice_watches: vec![],
+            timeouts: Default::default(),
+            isa: None,
+        });
+        let factory = RiverFuzzFactory {
+            registry: Arc::new(registry),
+        };
+        let job = Job {
+            id: crate::types::JobId::new(),
+            dut: DutId::new("river-1"),
+            dut_kind: DutKind::RiverRc1Nano,
+            kind: JobKind::Fuzz {
+                iterations: 5,
+                seed: 0xdeadbeef,
+                insn_count: 8,
+                cycles: 500,
+                strict_coverage: false,
+                generator: crate::types::GeneratorKind::RawAsm,
+            },
+            campaign: None,
+            state: JobState::Queued,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        };
+        assert!(factory.handles(&job.kind));
+        let dispatch = factory.build(&job).await.expect("fuzz build");
+        match dispatch {
+            Dispatch::Fuzz(fuzz) => {
+                assert_eq!(fuzz.driver.target(), DutKind::RiverRc1Nano);
+                assert_eq!(fuzz.config.iterations, 5);
+                assert_eq!(fuzz.config.seed, 0xdeadbeef);
+                assert_eq!(fuzz.config.insn_count, 8);
+                assert_eq!(fuzz.config.cycles, 500);
+                assert!(!fuzz.config.strict_coverage);
+                assert_eq!(
+                    fuzz.config.generator,
+                    crate::types::GeneratorKind::RawAsm,
+                    "default generator must be raw-asm",
+                );
+            }
+            other => panic!("expected Dispatch::Fuzz, got {other:?}"),
+        }
+    }
+
+    #[cfg(feature = "aegis")]
+    #[tokio::test]
+    async fn river_fuzz_factory_rejects_non_cpu_dut_kind() {
+        let registry = Arc::new(DutRegistry::new());
+        let factory = RiverFuzzFactory { registry };
+        let bogus_kind = DutKind::AegisLuna1;
+        {
+            let job = Job {
+                id: crate::types::JobId::new(),
+                dut: DutId::new("not-a-cpu"),
+                dut_kind: bogus_kind,
+                kind: JobKind::Fuzz {
+                    iterations: 1,
+                    seed: 0,
+                    insn_count: 1,
+                    cycles: 1,
+                    strict_coverage: false,
+                    generator: crate::types::GeneratorKind::RawAsm,
+                },
+                campaign: None,
+                state: JobState::Queued,
+                created_at: Utc::now(),
+                updated_at: Utc::now(),
+            };
+            let err = factory
+                .build(&job)
+                .await
+                .expect_err("non-CPU must be rejected");
+            assert!(format!("{err}").contains("not a CPU"), "got: {err}");
+        }
     }
 }

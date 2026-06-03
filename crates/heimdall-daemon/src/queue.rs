@@ -7,6 +7,8 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 use tracing::debug;
 
+use heimdall_core::DutKind;
+
 use crate::error::Result;
 use crate::event_bus::EventBus;
 use crate::store::JobStore;
@@ -31,9 +33,10 @@ impl JobQueue {
     }
 
     /// Submit a NewJob: persist via the store, publish JobCreated, dispatch
-    /// to the worker channel.
-    pub async fn submit(&self, new: NewJob) -> Result<Job> {
-        let job = self.store.create_job(new).await?;
+    /// to the worker channel. `dut_kind` is resolved by the caller (HTTP
+    /// route from the DUT registry, campaign runtime from its own DutKind).
+    pub async fn submit(&self, new: NewJob, dut_kind: DutKind) -> Result<Job> {
+        let job = self.store.create_job(new, dut_kind).await?;
         self.bus
             .publish(Event::JobCreated {
                 job: job.id,
@@ -46,6 +49,18 @@ impl JobQueue {
             .map_err(|_| crate::error::DaemonError::Config("worker channel closed".into()))?;
         debug!(job = %job.id, "submitted");
         Ok(job)
+    }
+
+    /// Re-dispatch an already-persisted job into the worker channel
+    /// without re-creating it in the store. Used by the boot-time
+    /// reconcile pass to recover `Queued` jobs that were stranded
+    /// when the previous daemon process exited: the DB row already
+    /// says `Queued`, we just need to push the id at the worker.
+    pub fn requeue(&self, id: JobId) -> Result<()> {
+        self.tx
+            .send(id)
+            .map_err(|_| crate::error::DaemonError::Config("worker channel closed".into()))?;
+        Ok(())
     }
 
     /// Update the job state and publish a JobStateChanged event.
@@ -71,7 +86,7 @@ mod tests {
     use super::*;
     use crate::store::SqliteJobStore;
     use crate::types::JobKind;
-    use heimdall_core::DutId;
+    use heimdall_core::{DutId, DutKind};
 
     #[tokio::test]
     async fn submit_persists_emits_dispatches() {
@@ -81,17 +96,21 @@ mod tests {
         let mut sub = bus.subscribe();
 
         let job = queue
-            .submit(NewJob {
-                dut: DutId::new("d1"),
-                kind: JobKind::MockHello,
-                campaign: None,
-            })
+            .submit(
+                NewJob {
+                    dut: DutId::new("d1"),
+                    kind: JobKind::MockHello,
+                    campaign: None,
+                },
+                DutKind::RiverRc1Small,
+            )
             .await
             .unwrap();
+        assert_eq!(job.dut_kind, DutKind::RiverRc1Small);
 
         // Event broadcast received.
-        let ev = sub.recv().await.unwrap();
-        match ev {
+        let stamped = sub.recv().await.unwrap();
+        match stamped.event {
             Event::JobCreated { job: j, .. } => assert_eq!(j, job.id),
             other => panic!("unexpected {other:?}"),
         }
